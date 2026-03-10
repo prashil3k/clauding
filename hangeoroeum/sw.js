@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hangeoroeum-v2';
+const CACHE_NAME = 'hangeoroeum-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -22,13 +22,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Network-first: try network, fall back to cache
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
+    fetch(e.request).then(resp => {
       if (resp.ok && e.request.method === 'GET') {
         const clone = resp.clone();
         caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
       }
       return resp;
-    }))
+    }).catch(() => caches.match(e.request))
   );
 });
