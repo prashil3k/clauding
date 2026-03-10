@@ -1,0 +1,18 @@
+{
+  "name": "한걸음 — Hangeoroeum",
+  "short_name": "한걸음",
+  "description": "Korean phrase learning, one step at a time",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F5F3EE",
+  "theme_color": "#F5F3EE",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "writing.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,2272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>한걸음 — Hangeoroeum</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#F5F3EE">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="icon" href="writing.png">
+  <link rel="apple-touch-icon" href="writing.png">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #F5F3EE;
+      --text: #141210;
+      --text-secondary: #4A4540;
+      --text-tertiary: #8A847A;
+      --accent: #4A5568;
+      --accent-warm: #6B5B4E;
+      --surface: #EBE8E2;
+      --surface-hover: #E2DED7;
+      --border: #DDD8D0;
+      --correct: #4A7C59;
+      --correct-bg: #EDF5F0;
+      --incorrect: #A0522D;
+      --incorrect-bg: #FDF2EC;
+      --max-w: 480px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html { height: 100%; -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100%;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #root {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .serif { font-family: 'Instrument Serif', Georgia, serif; }
+    .korean {
+      font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+      word-break: keep-all;
+    }
+    .korean-large {
+      font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+      font-size: 26px;
+      font-weight: 500;
+      line-height: 1.5;
+      color: var(--text);
+      word-break: keep-all;
+    }
+    .korean-medium {
+      font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+      font-size: 20px;
+      font-weight: 400;
+      line-height: 1.5;
+      word-break: keep-all;
+    }
+    .english-sub {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: var(--max-w);
+      padding: 0 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    .fade-up { animation: fadeUp 0.35s ease-out forwards; }
+    .fade-up-delay { opacity: 0; animation: fadeUp 0.35s ease-out 0.1s forwards; }
+    .fade-up-delay-2 { opacity: 0; animation: fadeUp 0.35s ease-out 0.2s forwards; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .btn-primary {
+      display: block; width: 100%; padding: 16px 24px;
+      background: var(--text); color: var(--bg); border: none; border-radius: 12px;
+      font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
+
+    .btn-secondary {
+      display: block; width: 100%; padding: 14px 24px;
+      background: transparent; color: var(--text-secondary);
+      border: 1.5px solid var(--border); border-radius: 12px;
+      font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+      cursor: pointer; transition: background 0.2s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-secondary:active { background: var(--surface); transform: scale(0.98); }
+
+    .btn-ghost {
+      background: none; border: none; color: var(--text-secondary);
+      font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+      cursor: pointer; padding: 8px 12px; border-radius: 8px;
+      transition: background 0.2s; -webkit-tap-highlight-color: transparent;
+    }
+    .btn-ghost:active { background: var(--surface); }
+
+    .btn-detect {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 12px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px;
+      font-weight: 500; color: var(--text-secondary); cursor: pointer;
+      transition: background 0.2s; -webkit-tap-highlight-color: transparent;
+    }
+    .btn-detect:active { background: var(--surface-hover); }
+    .btn-detect:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .speaker-btn {
+      background: none; border: 1.5px solid var(--border); border-radius: 50%;
+      width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background 0.2s; -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+    .speaker-btn:active { background: var(--surface); }
+    .speaker-btn.loading { opacity: 0.5; pointer-events: none; }
+    .speaker-btn svg { width: 18px; height: 18px; color: var(--text-secondary); }
+
+    .mc-option {
+      display: block; width: 100%; text-align: left; padding: 14px 18px;
+      background: white; border: 1.5px solid var(--border); border-radius: 12px;
+      font-family: 'DM Sans', sans-serif; font-size: 16px; cursor: pointer;
+      transition: border-color 0.2s, background 0.15s; line-height: 1.4;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mc-option:active { background: var(--surface); }
+    .mc-option.correct { border-color: var(--correct); background: var(--correct-bg); }
+    .mc-option.incorrect { border-color: var(--incorrect); background: var(--incorrect-bg); }
+    .mc-option.reveal-correct { border-color: var(--correct); background: var(--correct-bg); }
+    .mc-option.disabled { pointer-events: none; }
+
+    .progress-track {
+      width: 100%; height: 3px; background: var(--border);
+      border-radius: 2px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; background: var(--accent-warm);
+      border-radius: 2px; transition: width 0.4s ease;
+    }
+
+    .phrase-item {
+      padding: 16px 0; border-bottom: 1px solid var(--border);
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .phrase-item:last-child { border-bottom: none; }
+    .phrase-item:active { opacity: 0.7; }
+
+    .settings-input {
+      width: 100%; padding: 12px 16px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-family: 'DM Sans', sans-serif; font-size: 15px;
+      background: white; color: var(--text); outline: none; transition: border-color 0.2s;
+    }
+    .settings-input:focus { border-color: var(--accent-warm); }
+
+    .settings-select {
+      width: 100%; padding: 12px 16px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-family: 'DM Sans', sans-serif; font-size: 15px;
+      background: white; color: var(--text); outline: none; appearance: none;
+      cursor: pointer; transition: border-color 0.2s;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238A847A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 16px center;
+    }
+    .settings-select:focus { border-color: var(--accent-warm); }
+
+    .tap-reveal {
+      display: inline-block; padding: 4px 14px; background: var(--surface);
+      border-radius: 8px; font-size: 14px; color: var(--text-secondary);
+      cursor: pointer; transition: background 0.2s; border: none;
+      font-family: 'DM Sans', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tap-reveal:active { background: var(--surface-hover); }
+
+    .topic-tag {
+      display: inline-block; padding: 4px 10px; background: var(--surface);
+      border-radius: 6px; font-size: 12px; font-weight: 500;
+      color: var(--text-secondary); letter-spacing: 0.02em;
+      font-family: 'Noto Sans KR', sans-serif;
+    }
+
+    .grammar-toggle {
+      background: none; border: none; color: var(--text-tertiary);
+      font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer;
+      padding: 6px 0; display: flex; align-items: center; gap: 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .grammar-toggle svg {
+      width: 14px; height: 14px; transition: transform 0.2s;
+    }
+    .grammar-toggle.open svg { transform: rotate(90deg); }
+    .grammar-content {
+      font-size: 14px; color: var(--text-secondary); line-height: 1.6; padding: 8px 0 4px 0;
+    }
+
+    .scroll-area {
+      flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(24px + var(--safe-bottom));
+    }
+
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 0; min-height: 56px;
+    }
+    .top-bar-title {
+      font-family: 'Instrument Serif', Georgia, serif;
+      letter-spacing: -0.02em;
+    }
+
+    .stats-row { display: flex; gap: 24px; padding: 12px 0; }
+    .stat-item { text-align: center; }
+    .stat-value { font-size: 24px; font-weight: 600; color: var(--text); }
+    .stat-label { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+    .mastery-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block; flex-shrink: 0;
+    }
+
+    .collection-added {
+      display: inline-block; padding: 6px 14px;
+      background: var(--correct-bg); border: 1px solid #B8D8C6;
+      border-radius: 20px; font-size: 13px; font-weight: 500; color: var(--correct);
+    }
+
+    .phrase-detail { padding: 12px 0 8px 0; animation: fadeIn 0.2s ease-out; }
+    .phrase-detail-row { display: flex; gap: 8px; padding: 6px 0; font-size: 14px; }
+    .phrase-detail-label {
+      color: var(--text-tertiary); font-weight: 500; min-width: 60px; flex-shrink: 0;
+    }
+    .phrase-detail-value { color: var(--text-secondary); line-height: 1.5; }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-tertiary); }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+    .settings-section { margin-bottom: 32px; }
+    .settings-label {
+      font-size: 14px; font-weight: 500; display: block; margin-bottom: 8px;
+      color: var(--text);
+    }
+    .settings-hint {
+      font-size: 13px; color: var(--text-tertiary); margin-bottom: 12px; line-height: 1.5;
+    }
+    .settings-row {
+      display: flex; gap: 8px; align-items: center; margin-top: 8px;
+    }
+    .detect-status {
+      font-size: 12px; margin-top: 6px; line-height: 1.4;
+    }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(20,18,16,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 24px;
+      animation: fadeIn 0.3s ease-out;
+    }
+    .modal-card {
+      background: var(--bg); border-radius: 20px; width: 100%;
+      max-width: 400px; max-height: 90vh; overflow-y: auto;
+      padding: 36px 28px 28px; position: relative;
+      animation: fadeUp 0.35s ease-out;
+    }
+    .welcome-icon {
+      width: 64px; height: 64px; margin: 0 auto 20px;
+      display: block; border-radius: 14px;
+    }
+    .welcome-step-dots {
+      display: flex; gap: 6px; justify-content: center; margin-bottom: 28px;
+    }
+    .welcome-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border); transition: background 0.3s;
+    }
+    .welcome-dot.active { background: var(--accent-warm); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
+  <script src="sessions.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+    /* ── Storage ─────────────────────────────────────────────────── */
+    function load(key, fallback) {
+      try { const v = localStorage.getItem('hgr_' + key); return v ? JSON.parse(v) : fallback; }
+      catch { return fallback; }
+    }
+    function save(key, value) {
+      try { localStorage.setItem('hgr_' + key, JSON.stringify(value)); } catch {}
+    }
+    function useStorage(key, fallback) {
+      const [val, setVal] = useState(() => load(key, fallback));
+      const set = useCallback(v => {
+        const next = typeof v === 'function' ? v(load(key, fallback)) : v;
+        setVal(next);
+        save(key, next);
+      }, [key]);
+      return [val, set];
+    }
+
+    /* ── SM-2 Spaced Repetition ──────────────────────────────────── */
+    function sm2(quality, card) {
+      let { reps = 0, ef = 2.5, interval = 0 } = card;
+      if (quality >= 3) {
+        if (reps === 0) interval = 1;
+        else if (reps === 1) interval = 6;
+        else interval = Math.round(interval * ef);
+        reps++;
+      } else {
+        reps = 0;
+        interval = 1;
+      }
+      ef = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+      const nextReview = Date.now() + interval * 86400000;
+      return { reps, ef: Math.round(ef * 100) / 100, interval, nextReview };
+    }
+
+    function getMasteryColor(card) {
+      if (!card || !card.reps) return 'rgba(20,18,16,0.15)';
+      if (card.interval >= 21) return 'rgba(20,18,16,1)';
+      if (card.interval >= 7) return 'rgba(20,18,16,0.75)';
+      if (card.reps >= 2) return 'rgba(20,18,16,0.5)';
+      return 'rgba(20,18,16,0.3)';
+    }
+
+    /* ── Gemini TTS Constants ────────────────────────────────────── */
+    const KNOWN_TTS_MODELS = [
+      'gemini-2.5-flash-preview-tts',
+      'gemini-2.0-flash-lite-preview-tts',
+    ];
+    const DEFAULT_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
+    const TTS_VOICES = [
+      { id: 'Kore', label: 'Kore', desc: 'clear, calm' },
+      { id: 'Aoede', label: 'Aoede', desc: 'warm, expressive' },
+      { id: 'Charon', label: 'Charon', desc: 'deep, steady' },
+      { id: 'Puck', label: 'Puck', desc: 'bright, friendly' },
+      { id: 'Fenrir', label: 'Fenrir', desc: 'low, rich' },
+    ];
+    const DEFAULT_VOICE = 'Kore';
+    const MODEL_FALLBACKS = {
+      'gemini-2.5-flash-preview-tts': 'gemini-2.0-flash-lite-preview-tts',
+      'gemini-2.0-flash-lite-preview-tts': null,
+    };
+
+    /* ── Audio cache ─────────────────────────────────────────────── */
+    const audioCache = {};
+
+    /* ── PCM to WAV ──────────────────────────────────────────────── */
+    function pcmToWav(base64Pcm, sampleRate = 24000) {
+      const raw = atob(base64Pcm);
+      const len = raw.length;
+      const buf = new ArrayBuffer(44 + len);
+      const view = new DataView(buf);
+      function w(o, s) { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); }
+      w(0, 'RIFF');
+      view.setUint32(4, 36 + len, true);
+      w(8, 'WAVE');
+      w(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      w(36, 'data');
+      view.setUint32(40, len, true);
+      for (let i = 0; i < len; i++) view.setUint8(44 + i, raw.charCodeAt(i));
+      return new Blob([buf], { type: 'audio/wav' });
+    }
+
+    /* ── Gemini TTS Call ─────────────────────────────────────────── */
+    async function callGeminiTTS(text, apiKey, model, voice) {
+      const cacheKey = text + '|' + voice + '|' + model;
+      if (audioCache[cacheKey]) return audioCache[cacheKey];
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: voice }
+              }
+            }
+          }
+        })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.text().catch(() => '');
+        throw new Error(`TTS API ${resp.status}: ${err.slice(0, 200)}`);
+      }
+
+      const data = await resp.json();
+      const part = data?.candidates?.[0]?.content?.parts?.[0];
+      if (!part?.inlineData?.data) throw new Error('No audio in response');
+
+      const wavBlob = pcmToWav(part.inlineData.data);
+      const blobUrl = URL.createObjectURL(wavBlob);
+      audioCache[cacheKey] = blobUrl;
+      return blobUrl;
+    }
+
+    /* ── TTS with fallback ───────────────────────────────────────── */
+    let currentAudio = null;
+
+    function playAudioToEnd(audio) {
+      return new Promise((resolve) => {
+        audio.addEventListener('ended', resolve, { once: true });
+        audio.addEventListener('error', resolve, { once: true });
+      });
+    }
+
+    async function speakKorean(text) {
+      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+
+      const apiKey = load('geminiKey', '');
+      const model = load('ttsModel', DEFAULT_TTS_MODEL);
+      const voice = load('ttsVoice', DEFAULT_VOICE);
+
+      if (apiKey) {
+        try {
+          const url = await callGeminiTTS(text, apiKey, model, voice);
+          currentAudio = new Audio(url);
+          const endPromise = playAudioToEnd(currentAudio);
+          await currentAudio.play();
+          await endPromise;
+          return;
+        } catch (e) {
+          console.warn('Gemini TTS failed, trying fallback:', e.message);
+          const fallback = MODEL_FALLBACKS[model];
+          if (fallback) {
+            try {
+              const url = await callGeminiTTS(text, apiKey, fallback, voice);
+              currentAudio = new Audio(url);
+              const endPromise = playAudioToEnd(currentAudio);
+              await currentAudio.play();
+              await endPromise;
+              return;
+            } catch (e2) {
+              console.warn('Fallback TTS also failed:', e2.message);
+            }
+          }
+        }
+      }
+
+      // Web Speech API fallback
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ko-KR';
+        u.rate = 0.85;
+        const voices = window.speechSynthesis.getVoices();
+        const ko = voices.find(v => v.lang.startsWith('ko'));
+        if (ko) u.voice = ko;
+        await new Promise((resolve) => {
+          u.onend = resolve;
+          u.onerror = resolve;
+          window.speechSynthesis.speak(u);
+        });
+      }
+    }
+
+    /* ── TTS Prefetch ─────────────────────────────────────────── */
+    function prefetchSessionAudio(session) {
+      const apiKey = load('geminiKey', '');
+      if (!apiKey) return;
+      const model = load('ttsModel', DEFAULT_TTS_MODEL);
+      const voice = load('ttsVoice', DEFAULT_VOICE);
+      session.phrases.forEach(p => {
+        callGeminiTTS(p.korean, apiKey, model, voice).catch(() => {});
+      });
+    }
+
+    /* ── Detect Gemini Models ────────────────────────────────────── */
+    async function detectGeminiModels(apiKey) {
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      if (!resp.ok) throw new Error(`API ${resp.status}`);
+      const data = await resp.json();
+      const models = (data.models || [])
+        .map(m => m.name.replace('models/', ''))
+        .filter(n => n.includes('tts'));
+      // Known models first, then any new ones discovered
+      const known = KNOWN_TTS_MODELS.filter(m => models.includes(m));
+      const extra = models.filter(m => !KNOWN_TTS_MODELS.includes(m));
+      return [...known, ...extra];
+    }
+
+    /* ── Helpers ──────────────────────────────────────────────────── */
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    const ALL_PHRASES = (() => {
+      const all = [];
+      (window.SESSIONS || []).forEach(s => s.phrases.forEach(p => all.push({ ...p, _topic: s.topic })));
+      return all;
+    })();
+
+    const PHRASES_BY_TOPIC = (() => {
+      const map = {};
+      ALL_PHRASES.forEach(p => {
+        if (!map[p._topic]) map[p._topic] = [];
+        map[p._topic].push(p);
+      });
+      return map;
+    })();
+
+    /* ── Topic English labels (for tappable Korean tags) ──────── */
+    const TOPIC_ENGLISH = {
+      cafe: 'Café & ordering', convenience: 'Convenience store', restaurant: 'Restaurant & food',
+      transit: 'Transit & directions', shopping: 'Shopping', daily: 'Daily essentials',
+      movies: 'Movies & shows', music: 'Music & concerts', feelings: 'Expressing feelings',
+      weather: 'Weather & small talk', work: 'Work & meetings', opinions: 'Opinions & discussions',
+      kdrama: 'K-drama situations', 'food-culture': 'Food culture', philosophy: 'Philosophy & thoughts',
+      health: 'Health & wellbeing', climbing: 'Rock climbing', travel: 'Travel & directions',
+      books: 'Reading & books', texting: 'Texting & casual chat'
+    };
+
+    /* ── Interest Map: topic scoring from About You text ──────── */
+    const TOPIC_KEYWORDS = {
+      cafe: ['coffee', 'cafe', 'café', 'barista', 'latte', 'espresso', 'tea', 'drink'],
+      convenience: ['convenience', 'store', 'shopping', 'snack', 'daily', 'errand'],
+      restaurant: ['food', 'restaurant', 'eat', 'dining', 'cook', 'cooking', 'chef', 'cuisine', 'meal'],
+      transit: ['bus', 'subway', 'train', 'travel', 'commute', 'transport', 'metro', 'taxi'],
+      shopping: ['shop', 'shopping', 'buy', 'clothes', 'fashion', 'style', 'market'],
+      daily: ['daily', 'routine', 'life', 'everyday', 'morning', 'night'],
+      movies: ['movie', 'movies', 'film', 'films', 'cinema', 'director', 'actor', 'actress', 'screen', 'watch'],
+      music: ['music', 'song', 'songs', 'concert', 'band', 'sing', 'singer', 'k-pop', 'kpop', 'indie', 'playlist', 'album'],
+      feelings: ['feeling', 'feelings', 'emotion', 'emotions', 'mood', 'mental', 'anxiety', 'happy', 'sad', 'therapy', 'psychology', 'adhd'],
+      weather: ['weather', 'rain', 'snow', 'season', 'cold', 'hot', 'summer', 'winter'],
+      work: ['work', 'job', 'office', 'career', 'meeting', 'startup', 'tech', 'marketing', 'business', 'corporate', 'colleague', 'boss', 'project'],
+      opinions: ['opinion', 'debate', 'discuss', 'think', 'agree', 'disagree', 'politics', 'news', 'perspective'],
+      kdrama: ['drama', 'k-drama', 'kdrama', 'k-dramas', 'series', 'show', 'shows', 'netflix', 'korean drama', 'binge'],
+      'food-culture': ['food culture', 'kimchi', 'korean food', 'bbq', 'soju', 'drinking', 'street food', 'recipe', 'ferment'],
+      philosophy: ['philosophy', 'stoic', 'stoicism', 'jung', 'jungian', 'buddhism', 'buddha', 'meditation', 'meaning', 'purpose', 'spiritual', 'wisdom', 'plato', 'socrates', 'aristotle', 'psychedelic', 'mushroom', 'mindful'],
+      health: ['health', 'fitness', 'exercise', 'gym', 'yoga', 'stretch', 'sleep', 'diet', 'wellness', 'doctor', 'hospital'],
+      climbing: ['climb', 'climbing', 'rock', 'boulder', 'bouldering', 'route', 'wall', 'crag', 'belay', 'hold', 'outdoor'],
+      travel: ['travel', 'trip', 'visit', 'explore', 'seoul', 'busan', 'korea', 'abroad', 'flight', 'hostel', 'backpack', 'tourist', 'sightseeing'],
+      books: ['book', 'books', 'read', 'reading', 'author', 'writer', 'novel', 'library', 'literature', 'bookstore', 'booktalk'],
+      texting: ['text', 'texting', 'chat', 'message', 'social media', 'instagram', 'kakao', 'kakaotalk', 'online', 'meme', 'slang']
+    };
+
+    function buildInterestMap(aboutText) {
+      if (!aboutText || !aboutText.trim()) return null;
+      const lower = aboutText.toLowerCase();
+      const scores = {};
+      Object.entries(TOPIC_KEYWORDS).forEach(([topic, keywords]) => {
+        let score = 0;
+        keywords.forEach(kw => {
+          // Count occurrences (word boundary-ish matching)
+          const regex = new RegExp('\\b' + kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'gi');
+          const matches = lower.match(regex);
+          if (matches) score += matches.length;
+        });
+        if (score > 0) scores[topic] = score;
+      });
+      return Object.keys(scores).length > 0 ? scores : null;
+    }
+
+    function getOrderedSessions(completedIds, interestMap) {
+      const sessions = window.SESSIONS || [];
+      const remaining = sessions.filter(s => !completedIds.includes(s.id));
+      if (!interestMap || remaining.length === 0) return remaining;
+
+      // Sort remaining sessions: higher interest score first, then by original order
+      return [...remaining].sort((a, b) => {
+        const scoreA = interestMap[a.topic] || 0;
+        const scoreB = interestMap[b.topic] || 0;
+        if (scoreB !== scoreA) return scoreB - scoreA; // higher interest first
+        return a.id - b.id; // preserve original order as tiebreaker
+      });
+    }
+
+    // Detect loanwords (katakana-style Korean transcriptions of English words)
+    const LOANWORD_PAIRS = (() => {
+      const pairs = {};
+      ALL_PHRASES.forEach(p => {
+        // Extract likely loanwords: Korean text containing common loanword patterns
+        const koWords = p.korean.replace(/[.,!?]/g, '').split(/\s+/);
+        const enWords = p.english.toLowerCase().replace(/[.,!?'"]/g, '').split(/\s+/);
+        koWords.forEach(kw => {
+          enWords.forEach(ew => {
+            // Simple heuristic: if Korean word is 3+ chars and English word is 4+ chars
+            // and they look like transliterations (both start with similar sounds)
+            if (kw.length >= 3 && ew.length >= 4) {
+              pairs[kw] = ew;
+            }
+          });
+        });
+      });
+      return pairs;
+    })();
+
+    function hasLoanwordOverlap(correctText, distractorText) {
+      // Check if distractor shares obvious loanword-derived keywords with correct answer
+      const cWords = correctText.toLowerCase().replace(/[.,!?'"]/g, '').split(/\s+/);
+      const dWords = distractorText.toLowerCase().replace(/[.,!?'"]/g, '').split(/\s+/);
+      // If correct answer contains a distinctive English loanword, reject distractors that also contain it
+      const loanwords = ['americano', 'latte', 'decaf', 'wifi', 'outlet', 'protein', 'ramyeon',
+        'kimbap', 'kimchi', 'taxi', 'bus', 'coffee', 'cappuccino', 'espresso', 'cream',
+        'cheese', 'pizza', 'pasta', 'chocolate', 'cake', 'ice', 'hot dog', 'sandwich',
+        'smartphone', 'laptop', 'camera', 'selfie', 'karaoke'];
+      const cLoan = cWords.filter(w => loanwords.some(l => w.includes(l)));
+      if (cLoan.length === 0) return false;
+      return dWords.some(w => cLoan.some(l => w.includes(l)));
+    }
+
+    function getDistractors(correct, field, count = 3, sessionTopic) {
+      const correctVal = correct[field];
+      const correctLen = correctVal.length;
+
+      // Build candidate pool: prefer same-topic, then similar topics, then all
+      let sameTopic = (PHRASES_BY_TOPIC[sessionTopic] || [])
+        .filter(p => p.id !== correct.id && p[field] !== correctVal);
+      let otherPhrases = ALL_PHRASES
+        .filter(p => p.id !== correct.id && p[field] !== correctVal && p._topic !== sessionTopic);
+
+      // Score candidates by similarity (same topic + similar length = better distractor)
+      function score(p) {
+        let s = 0;
+        const pLen = p[field].length;
+        const lenRatio = Math.min(correctLen, pLen) / Math.max(correctLen, pLen);
+        s += lenRatio * 3; // length similarity (0-3)
+        if (p._topic === sessionTopic) s += 5; // same topic bonus
+        // Penalize if loanword overlap makes it too obvious (for english field)
+        if (field === 'english' && hasLoanwordOverlap(correctVal, p[field])) s -= 10;
+        return s;
+      }
+
+      const pool = [...sameTopic, ...otherPhrases];
+      // Sort by score descending, then take top candidates and shuffle among them
+      pool.sort((a, b) => score(b) - score(a));
+      // Take top 8 candidates and shuffle to add randomness
+      const topCandidates = pool.slice(0, Math.max(8, count * 2));
+      return shuffle(topCandidates).slice(0, count).map(p => p[field]);
+    }
+
+    function today() { return new Date().toISOString().slice(0, 10); }
+
+    /* ── Icons ────────────────────────────────────────────────────── */
+    function SpeakerIcon() {
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+        </svg>
+      );
+    }
+    function ChevronIcon() {
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      );
+    }
+    function BackIcon() {
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:20,height:20}}>
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      );
+    }
+    function HomeIcon() {
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}>
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      );
+    }
+    function GearIcon() {
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{width:20,height:20}}>
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      );
+    }
+
+    /* ── SpeakerButton ────────────────────────────────────────────── */
+    function SpeakerButton({ text }) {
+      const [loading, setLoading] = useState(false);
+
+      async function handleClick(e) {
+        e.stopPropagation();
+        setLoading(true);
+        try {
+          await speakKorean(text);
+        } catch {}
+        setLoading(false);
+      }
+
+      return (
+        <button className={'speaker-btn' + (loading ? ' loading' : '')} onClick={handleClick} aria-label="Listen">
+          <SpeakerIcon />
+        </button>
+      );
+    }
+
+    /* ── MultipleChoice ───────────────────────────────────────────── */
+    function MultipleChoice({ options, correctIndex, onAnswer, isKorean, koreanText }) {
+      const [selected, setSelected] = useState(null);
+      const answered = selected !== null;
+
+      function pick(i) {
+        if (answered) return;
+        setSelected(i);
+        if (i === correctIndex && koreanText) speakKorean(koreanText);
+        setTimeout(() => onAnswer(i === correctIndex), i === correctIndex ? 600 : 1200);
+      }
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {options.map((opt, i) => {
+            let cls = 'mc-option';
+            if (answered) {
+              cls += ' disabled';
+              if (i === correctIndex) cls += ' correct';
+              else if (i === selected) cls += ' incorrect';
+            }
+            return (
+              <button key={i} className={cls} onClick={() => pick(i)}>
+                <span className={isKorean ? 'korean' : ''} style={isKorean ? { fontSize: 18 } : {}}>
+                  {opt}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    /* ── SceneBeat (Beat 1) ───────────────────────────────────────── */
+    /* ── WarmupBeat (instant hook before scene) ──────────────────── */
+    function WarmupBeat({ mastery, onComplete, onExit, onSettings, sessionTopic }) {
+      // Pull 2 random previously-mastered phrases from any completed session
+      const questions = useMemo(() => {
+        const mastered = ALL_PHRASES.filter(p => mastery[p.id] && mastery[p.id].reps > 0);
+        if (mastered.length < 2) return [];
+        const picked = shuffle([...mastered]).slice(0, 2);
+        return picked.map(p => {
+          // Alternate between recognize (Korean→English) and recall (English→Korean)
+          const step = Math.random() > 0.5 ? 'recognize' : 'recall';
+          return { phrase: p, step };
+        });
+      }, []);
+
+      const [idx, setIdx] = useState(0);
+      const total = questions.length;
+
+      if (total === 0) { onComplete(); return null; }
+
+      const cur = questions[idx];
+      if (!cur) { onComplete(); return null; }
+
+      function handleNext() {
+        if (idx + 1 >= total) {
+          onComplete();
+        } else {
+          setIdx(idx + 1);
+        }
+      }
+
+      return (
+        <div className="app-container">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingTop: 12 }}>
+            <button className="btn-ghost" onClick={onExit} style={{ marginLeft: -12, padding: '8px' }} aria-label="Home"><HomeIcon /></button>
+            <div style={{ flex: 1 }}>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: ((idx + 1) / total) * 100 + '%' }} />
+              </div>
+            </div>
+            <button className="btn-ghost" onClick={onSettings} style={{ padding: '8px' }}><GearIcon /></button>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <PhraseExercise
+              key={cur.phrase.id + '-warmup-' + idx}
+              phrase={cur.phrase}
+              step={cur.step}
+              onNext={() => handleNext()}
+              sessionTopic={sessionTopic}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    function SceneBeat({ session, onContinue, onExit, onSettings }) {
+      const focus = session.phrases[session.focusIndex || 0];
+      return (
+        <div className="app-container">
+          <div className="top-bar">
+            <button className="btn-ghost" onClick={onExit} style={{ marginLeft: -12 }} aria-label="Home"><HomeIcon /></button>
+            <div style={{ flex: 1 }} />
+            <button className="btn-ghost" onClick={onSettings}><GearIcon /></button>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: 40 }}>
+            <div className="fade-up">
+              <TappableKorean korean={session.topicKorean} english={TOPIC_ENGLISH[session.topic] || session.topic} className="topic-tag" />
+            </div>
+            <div className="fade-up-delay" style={{ marginTop: 24 }}>
+              <p className="serif" style={{ fontSize: 16, lineHeight: 1.7, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                {session.scene}
+              </p>
+            </div>
+            <div className="fade-up-delay-2" style={{ marginTop: 40, textAlign: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 8 }}>
+                <span className="korean-large">{focus.korean}</span>
+                <SpeakerButton text={focus.korean} />
+              </div>
+              <p className="english-sub">{focus.english}</p>
+            </div>
+            <div style={{ marginTop: 48 }} className="fade-up-delay-2">
+              <button className="btn-primary" onClick={onContinue}>시작<span style={{ display: 'block', fontSize: 11, opacity: 0.5, fontWeight: 400, marginTop: 2 }}>Start</span></button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── KoreanPrompt (tappable Korean label with English hint) ──── */
+    function KoreanPrompt({ korean, english }) {
+      const [showHint, setShowHint] = useState(false);
+      const timerRef = useRef(null);
+
+      function handleTap() {
+        setShowHint(true);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => setShowHint(false), 2000);
+      }
+
+      return (
+        <p
+          className="korean"
+          onClick={handleTap}
+          style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 12, fontStyle: 'italic', cursor: 'pointer', userSelect: 'none', WebkitTapHighlightColor: 'transparent' }}
+        >
+          {showHint ? english : korean}
+        </p>
+      );
+    }
+
+    /* ── TappableKorean (generic tap-to-reveal for any Korean text) ── */
+    function TappableKorean({ korean, english, className, style: customStyle }) {
+      const [showHint, setShowHint] = useState(false);
+      const timerRef = useRef(null);
+      function handleTap() {
+        setShowHint(true);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => setShowHint(false), 2000);
+      }
+      return (
+        <span
+          onClick={handleTap}
+          className={className}
+          style={{ cursor: 'pointer', userSelect: 'none', WebkitTapHighlightColor: 'transparent', ...customStyle }}
+        >
+          {showHint ? english : korean}
+        </span>
+      );
+    }
+
+    /* ── PhraseExercise (single phrase, single step) ──────────────── */
+    function PhraseExercise({ phrase, step, onNext, sessionTopic }) {
+      const [revealed, setRevealed] = useState(false);
+
+      // Auto-play TTS for listen exercises
+      useEffect(() => {
+        if (step === 'listen') speakKorean(phrase.korean);
+      }, []);
+
+      if (step === 'see') {
+        return (
+          <div className="fade-up" style={{ textAlign: 'center', padding: '40px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
+              <span className="korean-large">{phrase.korean}</span>
+              <SpeakerButton text={phrase.korean} />
+            </div>
+            {!revealed ? (
+              <button className="tap-reveal" onClick={() => setRevealed(true)}>
+                뜻 보기 <span style={{ opacity: 0.5, fontSize: 12 }}>see meaning</span>
+              </button>
+            ) : (
+              <p className="english-sub fade-in">{phrase.english}</p>
+            )}
+            <div style={{ marginTop: 40 }}>
+              <button className="btn-primary" onClick={() => onNext(null)}>계속<span style={{ display: 'block', fontSize: 11, opacity: 0.5, fontWeight: 400, marginTop: 2 }}>Continue</span></button>
+            </div>
+          </div>
+        );
+      }
+
+      if (step === 'recognize') {
+        const distractors = useMemo(() => getDistractors(phrase, 'english', 3, sessionTopic), [phrase.id]);
+        const options = useMemo(() => shuffle([phrase.english, ...distractors]), [phrase.id]);
+        const correctIndex = options.indexOf(phrase.english);
+        return (
+          <div className="fade-up" style={{ padding: '24px 0' }}>
+            <KoreanPrompt korean="무슨 뜻이에요?" english="What does this mean?" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+              <span className="korean-large">{phrase.korean}</span>
+              <SpeakerButton text={phrase.korean} />
+            </div>
+            <MultipleChoice
+              options={options}
+              correctIndex={correctIndex}
+              onAnswer={correct => onNext(correct ? 4 : 1)}
+              isKorean={false}
+              koreanText={phrase.korean}
+            />
+          </div>
+        );
+      }
+
+      if (step === 'recall') {
+        const distractors = useMemo(() => getDistractors(phrase, 'korean', 3, sessionTopic), [phrase.id]);
+        const options = useMemo(() => shuffle([phrase.korean, ...distractors]), [phrase.id]);
+        const correctIndex = options.indexOf(phrase.korean);
+        return (
+          <div className="fade-up" style={{ padding: '24px 0' }}>
+            <KoreanPrompt korean="어떻게 말해요?" english="How do you say this?" />
+            <p style={{ fontSize: 18, marginBottom: 28, lineHeight: 1.5 }}>{phrase.english}</p>
+            <MultipleChoice
+              options={options}
+              correctIndex={correctIndex}
+              onAnswer={correct => onNext(correct ? 5 : 2)}
+              isKorean={true}
+              koreanText={phrase.korean}
+            />
+          </div>
+        );
+      }
+
+      if (step === 'listen') {
+        // Listen-first: hear the audio, pick the English meaning (no Korean text shown)
+        const distractors = useMemo(() => getDistractors(phrase, 'english', 3, sessionTopic), [phrase.id]);
+        const options = useMemo(() => shuffle([phrase.english, ...distractors]), [phrase.id]);
+        const correctIndex = options.indexOf(phrase.english);
+        return (
+          <div className="fade-up" style={{ padding: '24px 0', textAlign: 'center' }}>
+            <KoreanPrompt korean="들어 보세요" english="Listen carefully" />
+            <div style={{ marginBottom: 28 }}>
+              <button
+                onClick={() => speakKorean(phrase.korean)}
+                style={{
+                  width: 72, height: 72, borderRadius: '50%', border: '2px solid var(--border)',
+                  background: 'var(--surface)', cursor: 'pointer', display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s'
+                }}
+                onMouseOver={e => e.currentTarget.style.background = 'var(--surface-hover)'}
+                onMouseOut={e => e.currentTarget.style.background = 'var(--surface)'}
+                aria-label="Play audio again"
+              >
+                <svg viewBox="0 0 24 24" fill="var(--text)" style={{ width: 28, height: 28 }}>
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                </svg>
+              </button>
+            </div>
+            <MultipleChoice
+              options={options}
+              correctIndex={correctIndex}
+              onAnswer={correct => onNext(correct ? 5 : 1)}
+              isKorean={false}
+              koreanText={phrase.korean}
+            />
+          </div>
+        );
+      }
+
+      if (step === 'context') {
+        // Context matching: show the situational context, pick which Korean phrase fits
+        const distractors = useMemo(() => getDistractors(phrase, 'korean', 3, sessionTopic), [phrase.id]);
+        const options = useMemo(() => shuffle([phrase.korean, ...distractors]), [phrase.id]);
+        const correctIndex = options.indexOf(phrase.korean);
+        return (
+          <div className="fade-up" style={{ padding: '24px 0' }}>
+            <KoreanPrompt korean="어떤 표현이에요?" english="Which phrase fits?" />
+            <div style={{
+              background: 'var(--surface)', borderRadius: 12, padding: '16px 20px',
+              marginBottom: 28, lineHeight: 1.6, fontSize: 15, color: 'var(--text-secondary)',
+              fontStyle: 'italic', borderLeft: '3px solid var(--accent-warm)'
+            }}>
+              {phrase.context || phrase.english}
+            </div>
+            <MultipleChoice
+              options={options}
+              correctIndex={correctIndex}
+              onAnswer={correct => onNext(correct ? 5 : 2)}
+              isKorean={true}
+              koreanText={phrase.korean}
+            />
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    /* ── PhraseBeat (Beat 2) ──────────────────────────────────────── */
+    function PhraseBeat({ session, onComplete, mastery, setMastery, onExit, onSettings }) {
+      const phrases = session.phrases;
+      const focusIdx = session.focusIndex || 0;
+
+      const sequence = useMemo(() => {
+        const seq = [];
+        const focus = phrases[focusIdx];
+        const others = phrases.filter((_, i) => i !== focusIdx);
+
+        // Warm-up is now its own beat (WarmupBeat) before the scene.
+        // PhraseBeat starts with introducing new phrases.
+
+        // Phase 1: Reveal — show focus phrase + all non-focus phrases
+        seq.push({ phrase: focus, step: 'see' });
+        others.forEach(p => seq.push({ phrase: p, step: 'see' }));
+
+        // Phase 2: Test — recognize all phrases (shuffled, focus included)
+        shuffle([...phrases]).forEach(p => seq.push({ phrase: p, step: 'recognize' }));
+
+        // Phase 3: Final mixed recall — all phrases, diverse exercise types
+        const mixedTypes = ['recall', 'listen', 'context'];
+        const finalPhrases = shuffle([...phrases]);
+        finalPhrases.forEach((p, i) => {
+          const step = (p.id === focus.id) ? 'recall' : mixedTypes[i % mixedTypes.length];
+          seq.push({ phrase: p, step });
+        });
+        return seq;
+      }, [session.id]);
+
+      const [idx, setIdx] = useState(0);
+      const scoresRef = useRef({});
+      const [ttsHintDismissed, setTtsHintDismissed] = useState(false);
+      const hasGeminiKey = !!load('geminiKey', '');
+
+      const total = sequence.length;
+      const progress = total > 0 ? ((idx + 1) / total) * 100 : 0;
+
+      function handleNext(quality) {
+        if (typeof quality === 'number') {
+          const pid = sequence[idx].phrase.id;
+          const prev = scoresRef.current[pid] || [];
+          scoresRef.current[pid] = [...prev, quality];
+        }
+
+        if (idx + 1 >= total) {
+          const newMastery = { ...mastery };
+          Object.entries(scoresRef.current).forEach(([pid, quals]) => {
+            const avg = Math.round(quals.reduce((a, b) => a + b, 0) / quals.length);
+            const existing = newMastery[pid] || { reps: 0, ef: 2.5, interval: 0 };
+            newMastery[pid] = sm2(avg, existing);
+          });
+          setMastery(newMastery);
+          onComplete();
+        } else {
+          setIdx(idx + 1);
+        }
+      }
+
+      const cur = sequence[idx];
+      if (!cur) return null;
+
+      return (
+        <div className="app-container">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingTop: 12 }}>
+            <button className="btn-ghost" onClick={onExit} style={{ marginLeft: -12, padding: '8px' }} aria-label="Home"><HomeIcon /></button>
+            {idx > 0 && <button className="btn-ghost" onClick={() => setIdx(idx - 1)} style={{ padding: '8px' }} aria-label="Previous"><BackIcon /></button>}
+            <div style={{ flex: 1 }}>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: progress + '%' }} />
+              </div>
+            </div>
+            <button className="btn-ghost" onClick={onSettings} style={{ padding: '8px' }}><GearIcon /></button>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, textAlign: 'center' }}>
+            {idx + 1} / {total}
+          </p>
+          {!hasGeminiKey && !ttsHintDismissed && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+              <span style={{ flex: 1 }}>Add a Gemini key for natural audio</span>
+              <button className="btn-ghost" onClick={onSettings} style={{ fontSize: 12, padding: '4px 8px', color: 'var(--accent-warm)' }}>Settings</button>
+              <button className="btn-ghost" onClick={() => setTtsHintDismissed(true)} style={{ fontSize: 16, padding: '2px 6px', lineHeight: 1 }}>&times;</button>
+            </div>
+          )}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <PhraseExercise
+              key={cur.phrase.id + '-' + cur.step + '-' + idx}
+              phrase={cur.phrase}
+              step={cur.step}
+              onNext={handleNext}
+              sessionTopic={session.topic}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    /* ── DialogueBeat (between Phrases and Takeaway) ─────────────── */
+    function DialogueBeat({ session, onContinue, onExit, onSettings }) {
+      const phrases = session.phrases;
+      const lines = useMemo(() => {
+        // Pick 3 phrases that form a natural exchange (focus + 2 others)
+        const focusIdx = session.focusIndex || 0;
+        const focus = phrases[focusIdx];
+        const others = phrases.filter((_, i) => i !== focusIdx);
+        // Use up to 3 lines: other, focus, other — like a real conversation
+        const picked = [];
+        if (others[0]) picked.push({ speaker: 'B', phrase: others[0] });
+        picked.push({ speaker: 'A', phrase: focus });
+        if (others[1]) picked.push({ speaker: 'B', phrase: others[1] });
+        return picked;
+      }, [session.id]);
+
+      const [visibleCount, setVisibleCount] = useState(0);
+      const [showTranslation, setShowTranslation] = useState(false);
+      const playingRef = useRef(false);
+
+      // Auto-play lines one by one with delays
+      useEffect(() => {
+        if (playingRef.current) return;
+        playingRef.current = true;
+        let cancelled = false;
+        async function playLines() {
+          for (let i = 0; i < lines.length; i++) {
+            if (cancelled) return;
+            setVisibleCount(i + 1);
+            try {
+              await speakKorean(lines[i].phrase.korean);
+            } catch (e) { /* continue on TTS failure */ }
+            // Short pause between lines
+            if (i < lines.length - 1) {
+              await new Promise(r => setTimeout(r, 600));
+            }
+          }
+        }
+        playLines();
+        return () => { cancelled = true; };
+      }, []);
+
+      const speakerA = '나';  // "me"
+      const speakerB = session.topicKorean === '카페' ? '바리스타' :
+                        session.topic === 'restaurant' ? '직원' :
+                        session.topic === 'convenience' ? '직원' :
+                        session.topic === 'transit' ? '기사님' :
+                        session.topic === 'shopping' ? '직원' :
+                        '상대방';  // "the other person"
+
+      return (
+        <div className="app-container" style={{ paddingTop: 0, paddingBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingTop: 12 }}>
+            <button className="btn-ghost" onClick={onExit} style={{ marginLeft: -12, padding: '8px' }} aria-label="Home"><HomeIcon /></button>
+            <div style={{ flex: 1 }} />
+            <button className="btn-ghost" onClick={onSettings} style={{ padding: '8px' }}><GearIcon /></button>
+          </div>
+
+          <div className="fade-up" style={{ textAlign: 'center', marginBottom: 24, marginTop: 24 }}>
+            <p className="serif" style={{ fontSize: 14, color: 'var(--text-tertiary)', fontStyle: 'italic', marginBottom: 4 }}>
+              잠깐 대화 <span style={{ opacity: 0.5, fontSize: 12 }}>mini dialogue</span>
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {lines.map((line, i) => {
+              if (i >= visibleCount) return null;
+              const isMe = line.speaker === 'A';
+              const name = isMe ? speakerA : speakerB;
+              return (
+                <div key={i} className="fade-up" style={{
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: isMe ? 'flex-end' : 'flex-start'
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 3, paddingLeft: isMe ? 0 : 4, paddingRight: isMe ? 4 : 0 }}>
+                    {name}
+                  </span>
+                  <div style={{
+                    background: isMe ? 'var(--accent-warm)' : 'var(--surface)',
+                    color: isMe ? '#fff' : 'var(--text)',
+                    borderRadius: 16,
+                    borderTopRightRadius: isMe ? 4 : 16,
+                    borderTopLeftRadius: isMe ? 16 : 4,
+                    padding: '12px 16px',
+                    maxWidth: '85%',
+                    position: 'relative'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontFamily: "'Noto Sans KR', sans-serif", fontSize: 16, fontWeight: 400 }}>
+                        {line.phrase.korean}
+                      </span>
+                      <button
+                        onClick={() => speakKorean(line.phrase.korean)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                          opacity: 0.6, flexShrink: 0
+                        }}
+                        aria-label="Play audio"
+                      >
+                        <svg viewBox="0 0 24 24" fill={isMe ? '#fff' : 'var(--text)'} style={{ width: 14, height: 14 }}>
+                          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                        </svg>
+                      </button>
+                    </div>
+                    {showTranslation && (
+                      <p style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{line.phrase.english}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {visibleCount >= lines.length && (
+            <div className="fade-up" style={{ marginTop: 32, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+              <button
+                className="btn-ghost"
+                onClick={() => setShowTranslation(!showTranslation)}
+                style={{ fontSize: 13, color: 'var(--text-tertiary)' }}
+              >
+                {showTranslation ? '한국어만' : '뜻 보기'} <span style={{ opacity: 0.5, fontSize: 11 }}>{showTranslation ? 'Korean only' : 'see meaning'}</span>
+              </button>
+              <button className="btn-primary" onClick={onContinue}>
+                계속<span style={{ display: 'block', fontSize: 11, opacity: 0.5, fontWeight: 400, marginTop: 2 }}>Continue</span>
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── TakeawayBeat (Beat 3) ────────────────────────────────────── */
+    function TakeawayBeat({ session, onMore, onCollection, onExit, onSettings }) {
+      const focus = session.phrases[session.focusIndex || 0];
+      const [grammarOpen, setGrammarOpen] = useState(false);
+
+      return (
+        <div className="app-container" style={{ paddingTop: 0, paddingBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingTop: 12 }}>
+            <button className="btn-ghost" onClick={onExit} style={{ marginLeft: -12, padding: '8px' }} aria-label="Home"><HomeIcon /></button>
+            <div style={{ flex: 1 }} />
+            <button className="btn-ghost" onClick={onSettings} style={{ padding: '8px' }}><GearIcon /></button>
+          </div>
+
+          <div className="fade-up" style={{ textAlign: 'center', marginTop: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 12 }}>
+              <span className="korean-large" style={{ fontSize: 30 }}>{focus.korean}</span>
+              <SpeakerButton text={focus.korean} />
+            </div>
+            <p className="english-sub" style={{ fontSize: 16 }}>{focus.english}</p>
+          </div>
+
+          <div className="fade-up-delay" style={{ marginTop: 16, textAlign: 'center' }}>
+            <p className="serif" style={{ fontSize: 14, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>{focus.context}</p>
+          </div>
+
+          {focus.grammar && (
+            <div className="fade-up-delay" style={{ marginTop: 16, textAlign: 'center' }}>
+              <button
+                className={'grammar-toggle' + (grammarOpen ? ' open' : '')}
+                onClick={() => setGrammarOpen(!grammarOpen)}
+                style={{ margin: '0 auto' }}
+              >
+                <ChevronIcon /> grammar note
+              </button>
+              {grammarOpen && <p className="grammar-content">{focus.grammar}</p>}
+            </div>
+          )}
+
+          <div className="fade-up-delay" style={{ marginTop: 24, textAlign: 'center' }}>
+            <span className="collection-added">Added to your collection</span>
+          </div>
+
+          <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 12 }} className="fade-up-delay-2">
+            <button className="btn-primary" onClick={onMore}>한 번 더<span style={{ display: 'block', fontSize: 11, opacity: 0.5, fontWeight: 400, marginTop: 2 }}>One more</span></button>
+            <button className="btn-secondary" onClick={onCollection}>컬렉션<span style={{ display: 'block', fontSize: 11, opacity: 0.5, fontWeight: 400, marginTop: 2 }}>Collection</span></button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── SessionView ──────────────────────────────────────────────── */
+    function SessionView({ sessionId, onFinish, onMore, mastery, setMastery, onSettings, onExit }) {
+      // Start with warmup if user has mastery data, otherwise skip to scene
+      const hasMasteryData = Object.values(mastery).some(m => m.reps > 0);
+      const [beat, setBeat] = useState(hasMasteryData ? 'warmup' : 'scene');
+      const sessions = window.SESSIONS || [];
+      const session = sessions.find(s => s.id === sessionId);
+
+      useEffect(() => {
+        if (session) prefetchSessionAudio(session);
+      }, [sessionId]);
+
+      if (!session) {
+        const hasAnthropicKey = !!load('apiKey', '');
+        return (
+          <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
+            <div className="empty-state" style={{ padding: '40px 20px' }}>
+              <div className="empty-state-icon">🎉</div>
+              <p className="serif" style={{ fontSize: 22, color: 'var(--text)', fontStyle: 'italic', letterSpacing: '-0.02em', marginBottom: 8 }}>
+                All 60 sessions complete!
+              </p>
+              <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 24 }}>
+                You've learned ~300 Korean phrases. That's incredible.
+              </p>
+              {!hasAnthropicKey ? (
+                <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '20px 18px', marginBottom: 24, textAlign: 'left' }}>
+                  <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)', marginBottom: 6 }}>
+                    Want more sessions?
+                  </p>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 14 }}>
+                    Add an Anthropic API key in Settings and the app can generate new personalized sessions for you with Claude.
+                  </p>
+                  <button className="btn-primary" onClick={onSettings} style={{ fontSize: 14, padding: '12px 18px' }}>
+                    Go to Settings
+                  </button>
+                </div>
+              ) : (
+                <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '20px 18px', marginBottom: 24, textAlign: 'left' }}>
+                  <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)', marginBottom: 6 }}>
+                    Generate new sessions
+                  </p>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    Your Anthropic key is set. New AI-generated sessions are coming soon!
+                  </p>
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 260 }}>
+                <button className="btn-secondary" onClick={onFinish}>
+                  Back to home
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (beat === 'warmup') {
+        return (
+          <WarmupBeat
+            mastery={mastery}
+            onComplete={() => setBeat('scene')}
+            onExit={onExit}
+            onSettings={onSettings}
+            sessionTopic={session.topic}
+          />
+        );
+      }
+      if (beat === 'scene') return <SceneBeat session={session} onContinue={() => setBeat('phrases')} onExit={onExit} onSettings={onSettings} />;
+      if (beat === 'phrases') {
+        return (
+          <PhraseBeat
+            key={sessionId}
+            session={session}
+            mastery={mastery}
+            setMastery={setMastery}
+            onComplete={() => setBeat('dialogue')}
+            onExit={onExit}
+            onSettings={onSettings}
+          />
+        );
+      }
+      if (beat === 'dialogue') {
+        return <DialogueBeat session={session} onContinue={() => setBeat('takeaway')} onExit={onExit} onSettings={onSettings} />;
+      }
+      if (beat === 'takeaway') {
+        return <TakeawayBeat session={session} onMore={onMore} onCollection={onFinish} onExit={onExit} onSettings={onSettings} />;
+      }
+      return null;
+    }
+
+    /* ── CollectionView ───────────────────────────────────────────── */
+    function CollectionView({ completedSessions, mastery, onBack, onStartSession, onReplaySession }) {
+      const [expandedId, setExpandedId] = useState(null);
+      const [tab, setTab] = useState('phrases');
+      const sessions = window.SESSIONS || [];
+
+      const completedSessionObjects = useMemo(() => {
+        return [...completedSessions]
+          .map(sid => sessions.find(x => x.id === sid))
+          .filter(Boolean)
+          .reverse();
+      }, [completedSessions]);
+
+      const learnedPhrases = useMemo(() => {
+        const phrases = [];
+        completedSessions.forEach(sid => {
+          const s = sessions.find(x => x.id === sid);
+          if (s) s.phrases.forEach(p => phrases.push({ ...p, session: s }));
+        });
+        return phrases;
+      }, [completedSessions]);
+
+      const grouped = useMemo(() => {
+        const map = {};
+        learnedPhrases.forEach(p => {
+          const key = p.session.topicKorean;
+          if (!map[key]) map[key] = { topicKorean: key, topic: p.session.topic, phrases: [] };
+          map[key].phrases.push(p);
+        });
+        return Object.values(map);
+      }, [learnedPhrases]);
+
+      return (
+        <div className="app-container">
+          <div className="top-bar">
+            <button className="btn-ghost" onClick={onBack} style={{ marginLeft: -12 }}>
+              <BackIcon />
+            </button>
+            <span className="top-bar-title serif" style={{ fontSize: 20 }}>컬렉션</span>
+            <div style={{ width: 44 }} />
+          </div>
+
+          {learnedPhrases.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">📚</div>
+              <p style={{ marginBottom: 8 }}>Your collection is empty</p>
+              <p style={{ fontSize: 14 }}>Complete a session to start collecting phrases</p>
+              <button className="btn-primary" onClick={onStartSession} style={{ marginTop: 24, maxWidth: 240 }}>
+                다음 한걸음
+              </button>
+            </div>
+          ) : (
+            <div className="scroll-area">
+              <div className="stats-row" style={{ justifyContent: 'flex-start' }}>
+                <div className="stat-item">
+                  <div className="stat-value">{learnedPhrases.length}</div>
+                  <div className="stat-label">phrases</div>
+                </div>
+                <div className="stat-item">
+                  <div className="stat-value">{completedSessions.length}</div>
+                  <div className="stat-label">sessions</div>
+                </div>
+              </div>
+              {/* Tab switcher */}
+              <div style={{ display: 'flex', gap: 0, marginBottom: 16, background: 'var(--surface)', borderRadius: 10, padding: 3 }}>
+                <button
+                  onClick={() => setTab('phrases')}
+                  style={{
+                    flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 500, border: 'none', cursor: 'pointer',
+                    borderRadius: 8, transition: 'all 0.15s',
+                    background: tab === 'phrases' ? '#fff' : 'transparent',
+                    color: tab === 'phrases' ? 'var(--text)' : 'var(--text-tertiary)',
+                    boxShadow: tab === 'phrases' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+                  }}
+                >
+                  표현 <span style={{ opacity: 0.5, fontSize: 11 }}>Phrases</span>
+                </button>
+                <button
+                  onClick={() => setTab('sessions')}
+                  style={{
+                    flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 500, border: 'none', cursor: 'pointer',
+                    borderRadius: 8, transition: 'all 0.15s',
+                    background: tab === 'sessions' ? '#fff' : 'transparent',
+                    color: tab === 'sessions' ? 'var(--text)' : 'var(--text-tertiary)',
+                    boxShadow: tab === 'sessions' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+                  }}
+                >
+                  수업 <span style={{ opacity: 0.5, fontSize: 11 }}>Sessions</span>
+                </button>
+              </div>
+
+              {tab === 'sessions' && (
+                <div>
+                  {completedSessionObjects.length === 0 ? (
+                    <p style={{ fontSize: 14, color: 'var(--text-tertiary)', textAlign: 'center', padding: '24px 0' }}>
+                      No sessions completed yet
+                    </p>
+                  ) : (
+                    completedSessionObjects.map(s => {
+                      const focusPhrase = s.phrases[s.focusIndex || 0];
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => onReplaySession(s.id)}
+                          style={{
+                            padding: '16px 18px', marginBottom: 10, background: 'var(--surface)',
+                            borderRadius: 14, cursor: 'pointer', transition: 'background 0.15s',
+                            borderLeft: '3px solid var(--accent-warm)'
+                          }}
+                          onMouseOver={e => e.currentTarget.style.background = 'var(--surface-hover)'}
+                          onMouseOut={e => e.currentTarget.style.background = 'var(--surface)'}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                              <TappableKorean korean={s.topicKorean} english={TOPIC_ENGLISH[s.topic] || s.topic} /> · Session {s.id}
+                            </span>
+                            <span style={{ fontSize: 12, color: 'var(--accent-warm)', fontWeight: 500 }}>
+                              복습 →
+                            </span>
+                          </div>
+                          <p className="serif" style={{ fontSize: 15, color: 'var(--text)', fontStyle: 'italic', lineHeight: 1.5, marginBottom: 10 }}>
+                            {s.scene}
+                          </p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <span style={{ fontFamily: "'Noto Sans KR', sans-serif", fontSize: 16, fontWeight: 500, color: 'var(--text)' }}>
+                              {focusPhrase.korean}
+                            </span>
+                            <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+                              {focusPhrase.english}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            {s.phrases.filter((_, i) => i !== (s.focusIndex || 0)).slice(0, 3).map(p => (
+                              <span key={p.id} style={{
+                                fontSize: 11, fontFamily: "'Noto Sans KR', sans-serif",
+                                background: 'var(--bg)', padding: '3px 8px', borderRadius: 6,
+                                color: 'var(--text-tertiary)'
+                              }}>
+                                {p.korean}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {tab === 'phrases' && <>
+              <div className="divider" />
+              {grouped.map(group => (
+                <div key={group.topicKorean} style={{ marginBottom: 8 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-tertiary)', padding: '12px 0 4px', letterSpacing: '0.03em' }}>
+                    <TappableKorean korean={group.topicKorean} english={TOPIC_ENGLISH[group.topic] || group.topic} />
+                  </p>
+                  {group.phrases.map(phrase => (
+                    <div key={phrase.id}>
+                      <div className="phrase-item" onClick={() => setExpandedId(expandedId === phrase.id ? null : phrase.id)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div className="mastery-dot" style={{ background: getMasteryColor(mastery[phrase.id]) }} />
+                          <div style={{ flex: 1 }}>
+                            <p className="korean" style={{ fontSize: 18, fontWeight: 500 }}>{phrase.korean}</p>
+                            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>{phrase.english}</p>
+                          </div>
+                          <SpeakerButton text={phrase.korean} />
+                        </div>
+                      </div>
+                      {expandedId === phrase.id && (
+                        <div className="phrase-detail">
+                          {phrase.context && (
+                            <div className="phrase-detail-row">
+                              <span className="phrase-detail-label">Context</span>
+                              <span className="phrase-detail-value">{phrase.context}</span>
+                            </div>
+                          )}
+                          {phrase.grammar && (
+                            <div className="phrase-detail-row">
+                              <span className="phrase-detail-label">Grammar</span>
+                              <span className="phrase-detail-value">{phrase.grammar}</span>
+                            </div>
+                          )}
+                          <div className="phrase-detail-row">
+                            <span className="phrase-detail-label">Scene</span>
+                            <span className="phrase-detail-value" style={{ fontSize: 13 }}>{phrase.session.scene}</span>
+                          </div>
+                          <button
+                            className="btn-ghost"
+                            onClick={(e) => { e.stopPropagation(); onReplaySession(phrase.session.id); }}
+                            style={{ marginTop: 8, fontSize: 13, color: 'var(--accent-warm)', padding: '6px 12px' }}
+                          >
+                            복습하기 <span style={{ opacity: 0.5, fontSize: 11 }}>Review this session</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              </>}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── SettingsView ─────────────────────────────────────────────── */
+    function SettingsView({ onBack }) {
+      const [geminiKey, setGeminiKey] = useStorage('geminiKey', '');
+      const [ttsModel, setTtsModel] = useStorage('ttsModel', DEFAULT_TTS_MODEL);
+      const [ttsVoice, setTtsVoice] = useStorage('ttsVoice', DEFAULT_VOICE);
+      const [anthropicKey, setAnthropicKey] = useStorage('apiKey', '');
+      const [availableModels, setAvailableModels] = useStorage('ttsModels', KNOWN_TTS_MODELS);
+      const [aboutYou, setAboutYou] = useStorage('aboutYou', '');
+
+      const [geminiInput, setGeminiInput] = useState(geminiKey);
+      const [anthropicInput, setAnthropicInput] = useState(anthropicKey);
+      const [aboutInput, setAboutInput] = useState(aboutYou);
+      const [saved, setSaved] = useState(null); // 'gemini' | 'anthropic' | 'about' | null
+      const [detecting, setDetecting] = useState(false);
+      const [detectMsg, setDetectMsg] = useState('');
+      const [testPlaying, setTestPlaying] = useState(false);
+
+      function saveGemini() {
+        setGeminiKey(geminiInput.trim());
+        setSaved('gemini');
+        setTimeout(() => setSaved(null), 2000);
+      }
+
+      function saveAnthropic() {
+        setAnthropicKey(anthropicInput.trim());
+        setSaved('anthropic');
+        setTimeout(() => setSaved(null), 2000);
+      }
+
+      function saveAboutYou() {
+        setAboutYou(aboutInput.trim());
+        setSaved('about');
+        setTimeout(() => setSaved(null), 2000);
+      }
+
+      async function handleDetect() {
+        const key = geminiInput.trim() || geminiKey;
+        if (!key) { setDetectMsg('Enter API key first'); return; }
+        setDetecting(true);
+        setDetectMsg('Detecting...');
+        try {
+          const models = await detectGeminiModels(key);
+          if (models.length > 0) {
+            setAvailableModels(models);
+            if (!models.includes(ttsModel)) setTtsModel(models[0]);
+            setDetectMsg(`Found ${models.length} TTS model${models.length > 1 ? 's' : ''}`);
+          } else {
+            setDetectMsg('No TTS models found');
+          }
+        } catch (e) {
+          setDetectMsg('Detection failed — check key');
+        }
+        setDetecting(false);
+        setTimeout(() => setDetectMsg(''), 4000);
+      }
+
+      async function testVoice() {
+        setTestPlaying(true);
+        try { await speakKorean('안녕하세요'); }
+        catch {}
+        setTestPlaying(false);
+      }
+
+      const DATA_KEYS = ['completedSessions', 'mastery', 'streak', 'lastSessionDate',
+        'apiKey', 'geminiKey', 'ttsModel', 'ttsVoice', 'ttsModels', 'welcomed', 'aboutYou'];
+
+      function handleExport() {
+        const data = {};
+        DATA_KEYS.forEach(k => {
+          const v = localStorage.getItem('hgr_' + k);
+          if (v !== null) data[k] = JSON.parse(v);
+        });
+        data._exported = new Date().toISOString();
+        data._version = 1;
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hangeoroeum-backup-${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      const fileInputRef = useRef(null);
+      const [importMsg, setImportMsg] = useState('');
+
+      function handleImport(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            if (!data.completedSessions && !data.mastery) {
+              setImportMsg('Invalid backup file');
+              setTimeout(() => setImportMsg(''), 3000);
+              return;
+            }
+            if (!confirm('This will replace your current progress with the imported data. Continue?')) return;
+            DATA_KEYS.forEach(k => {
+              if (data[k] !== undefined) {
+                localStorage.setItem('hgr_' + k, JSON.stringify(data[k]));
+              }
+            });
+            setImportMsg('Imported! Reloading...');
+            setTimeout(() => window.location.reload(), 800);
+          } catch {
+            setImportMsg('Could not read file');
+            setTimeout(() => setImportMsg(''), 3000);
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+      }
+
+      function handleReset() {
+        if (confirm('This will erase all your progress and collection. Are you sure?')) {
+          DATA_KEYS.forEach(k => localStorage.removeItem('hgr_' + k));
+          window.location.reload();
+        }
+      }
+
+      return (
+        <div className="app-container">
+          <div className="top-bar">
+            <button className="btn-ghost" onClick={onBack} style={{ marginLeft: -12 }}>
+              <BackIcon />
+            </button>
+            <span className="top-bar-title serif" style={{ fontSize: 22, fontStyle: 'italic' }}>Settings</span>
+            <div style={{ width: 44 }} />
+          </div>
+          <div className="scroll-area">
+
+            {/* Gemini TTS Section */}
+            <div className="settings-section">
+              <label className="settings-label">Gemini API Key</label>
+              <p className="settings-hint">
+                Free tier available. Powers natural Korean text-to-speech.
+              </p>
+              <input
+                className="settings-input"
+                type="password"
+                placeholder="AIza..."
+                value={geminiInput}
+                onChange={e => setGeminiInput(e.target.value)}
+              />
+              <div className="settings-row">
+                <button
+                  className="btn-primary"
+                  onClick={saveGemini}
+                  style={{ flex: 1, padding: '12px 16px', fontSize: 14, background: saved === 'gemini' ? 'var(--correct)' : undefined }}
+                >
+                  {saved === 'gemini' ? 'Saved' : 'Save Key'}
+                </button>
+              </div>
+            </div>
+
+            {/* TTS Model */}
+            <div className="settings-section">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label className="settings-label" style={{ marginBottom: 0 }}>TTS Model</label>
+                <button className="btn-detect" onClick={handleDetect} disabled={detecting}>
+                  🔍 {detecting ? 'Detecting...' : 'Detect'}
+                </button>
+              </div>
+              {detectMsg && (
+                <p className="detect-status" style={{ color: detectMsg.includes('Found') ? 'var(--correct)' : 'var(--text-tertiary)' }}>
+                  {detectMsg}
+                </p>
+              )}
+              <select
+                className="settings-select"
+                value={ttsModel}
+                onChange={e => setTtsModel(e.target.value)}
+              >
+                {availableModels.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* TTS Voice */}
+            <div className="settings-section">
+              <label className="settings-label">Voice</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  className="settings-select"
+                  value={ttsVoice}
+                  onChange={e => setTtsVoice(e.target.value)}
+                  style={{ flex: 1 }}
+                >
+                  {TTS_VOICES.map(v => (
+                    <option key={v.id} value={v.id}>{v.label} — {v.desc}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn-detect"
+                  onClick={testVoice}
+                  disabled={testPlaying}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {testPlaying ? '...' : '▶ Test'}
+                </button>
+              </div>
+            </div>
+
+            <div className="divider" style={{ margin: '8px 0 24px' }} />
+
+            {/* Anthropic API Key */}
+            <div className="settings-section">
+              <label className="settings-label">Anthropic API Key</label>
+              <p className="settings-hint">
+                Optional. For AI-generated sessions beyond the 60 pre-loaded ones.
+              </p>
+              <input
+                className="settings-input"
+                type="password"
+                placeholder="sk-ant-..."
+                value={anthropicInput}
+                onChange={e => setAnthropicInput(e.target.value)}
+              />
+              <button
+                className="btn-primary"
+                onClick={saveAnthropic}
+                style={{ marginTop: 8, padding: '12px 16px', fontSize: 14, background: saved === 'anthropic' ? 'var(--correct)' : undefined }}
+              >
+                {saved === 'anthropic' ? 'Saved' : 'Save Key'}
+              </button>
+            </div>
+
+            <div className="divider" style={{ margin: '8px 0 24px' }} />
+
+            {/* About You */}
+            <div className="settings-section">
+              <label className="settings-label">About You</label>
+              <p className="settings-hint">
+                Tell the app about yourself so it can prioritize lessons that match your life. This stays on your device.
+              </p>
+              <textarea
+                className="settings-input"
+                value={aboutInput}
+                onChange={e => setAboutInput(e.target.value)}
+                rows={5}
+                placeholder={"e.g. I work in marketing at a tech startup. I love rock climbing, K-dramas, and Korean movies. I'm into philosophy — Stoicism, Jung, Buddhism. I read a lot. I've been to Seoul twice and want to move there someday. I listen to Korean indie music, not just K-pop. I'm learning Korean to actually talk to people, not just pass tests..."}
+                style={{
+                  resize: 'vertical', minHeight: 100, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 14, padding: '12px 14px'
+                }}
+              />
+              <button
+                className="btn-primary"
+                onClick={saveAboutYou}
+                style={{ marginTop: 8, padding: '12px 16px', fontSize: 14, background: saved === 'about' ? 'var(--correct)' : undefined }}
+              >
+                {saved === 'about' ? 'Saved — lessons will adapt' : 'Save'}
+              </button>
+              {aboutYou && !saved && (
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, fontStyle: 'italic' }}>
+                  Your interests shape which topics come first.
+                </p>
+              )}
+            </div>
+
+            <div className="divider" style={{ margin: '8px 0 24px' }} />
+
+            {/* Export / Import */}
+            <div className="settings-section">
+              <label className="settings-label">Backup & Restore</label>
+              <p className="settings-hint">
+                Export your progress to a JSON file, or import a previous backup. Includes mastery data, completed sessions, streak, and settings.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn-secondary" onClick={handleExport} style={{ flex: 1, padding: '12px 16px', fontSize: 14 }}>
+                  Export
+                </button>
+                <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ flex: 1, padding: '12px 16px', fontSize: 14 }}>
+                  Import
+                </button>
+                <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+              </div>
+              {importMsg && (
+                <p className="detect-status" style={{ marginTop: 8, color: importMsg.includes('Imported') ? 'var(--correct)' : 'var(--incorrect)' }}>
+                  {importMsg}
+                </p>
+              )}
+            </div>
+
+            <div className="divider" style={{ margin: '8px 0 24px' }} />
+
+            {/* Reset */}
+            <div className="settings-section">
+              <label className="settings-label">Reset Progress</label>
+              <p className="settings-hint">
+                Erase all progress, mastery data, and collection. Cannot be undone.
+              </p>
+              <button
+                className="btn-secondary"
+                onClick={handleReset}
+                style={{ color: 'var(--incorrect)', borderColor: 'var(--incorrect)' }}
+              >
+                Reset Everything
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── HomeScreen ───────────────────────────────────────────────── */
+    function HomeScreen({ completedSessions, mastery, streak, onStartSession, onCollection, onSettings }) {
+      const sessions = window.SESSIONS || [];
+      const totalPhrases = completedSessions.reduce((acc, sid) => {
+        const s = sessions.find(x => x.id === sid);
+        return acc + (s ? s.phrases.length : 0);
+      }, 0);
+
+      const aboutYou = load('aboutYou', '');
+      const interestMap = buildInterestMap(aboutYou);
+      const orderedRemaining = getOrderedSessions(completedSessions, interestMap);
+      const nextSession = orderedRemaining.length > 0 ? orderedRemaining[0] : null;
+      const allDone = !nextSession;
+
+      const recentPhrases = useMemo(() => {
+        return [...completedSessions].reverse().slice(0, 3).map(sid => {
+          const s = sessions.find(x => x.id === sid);
+          return s ? s.phrases[s.focusIndex || 0] : null;
+        }).filter(Boolean);
+      }, [completedSessions]);
+
+      return (
+        <div className="app-container">
+          <div className="top-bar">
+            <span className="serif" style={{ fontSize: 26, letterSpacing: '-0.02em' }}>한걸음</span>
+            <button className="btn-ghost" onClick={onSettings}><GearIcon /></button>
+          </div>
+          <div className="scroll-area">
+            {completedSessions.length > 0 && (
+              <div className="fade-in">
+                <div className="stats-row" style={{ justifyContent: 'flex-start' }}>
+                  <div className="stat-item">
+                    <div className="stat-value">{totalPhrases}</div>
+                    <div className="stat-label">phrases</div>
+                  </div>
+                  <div className="stat-item">
+                    <div className="stat-value">{completedSessions.length}</div>
+                    <div className="stat-label">sessions</div>
+                  </div>
+                  {streak > 0 && (
+                    <div className="stat-item">
+                      <div className="stat-value">{streak}</div>
+                      <div className="stat-label">day streak</div>
+                    </div>
+                  )}
+                </div>
+                <div className="divider" />
+              </div>
+            )}
+
+            <div style={{ padding: '24px 0 32px' }} className="fade-up">
+              {!allDone && nextSession && (
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 8, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
+                  Next: {nextSession.topicKorean}
+                </p>
+              )}
+              <button className="btn-primary" onClick={onStartSession} style={{ fontSize: 18, padding: '18px 24px' }}>
+                {allDone ? '복습하기' : '다음 한걸음'}
+                <span style={{ display: 'block', fontSize: 11, opacity: 0.5, fontWeight: 400, marginTop: 2 }}>{allDone ? 'Review' : 'Next step'}</span>
+              </button>
+              {completedSessions.length === 0 && (
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 12, textAlign: 'center', fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
+                  ~2 minutes per session
+                </p>
+              )}
+            </div>
+
+            {recentPhrases.length > 0 && (
+              <div className="fade-up-delay">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>RECENT</p>
+                  <button className="btn-ghost" onClick={onCollection} style={{ fontSize: 13 }}>See all</button>
+                </div>
+                {recentPhrases.map(p => (
+                  <div key={p.id} style={{ padding: '10px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="mastery-dot" style={{ background: getMasteryColor(mastery[p.id]) }} />
+                    <div style={{ flex: 1 }}>
+                      <span className="korean" style={{ fontSize: 17, fontWeight: 500 }}>{p.korean}</span>
+                      <span style={{ fontSize: 14, color: 'var(--text-tertiary)', marginLeft: 10 }}>{p.english}</span>
+                    </div>
+                    <SpeakerButton text={p.korean} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {completedSessions.length === 0 && (
+              <div className="fade-up-delay" style={{ textAlign: 'center', padding: '40px 20px' }}>
+                <p className="serif" style={{ fontSize: 22, color: 'var(--text-secondary)', lineHeight: 1.6, fontStyle: 'italic', letterSpacing: '-0.02em' }}>
+                  One phrase at a time.<br />One step at a time.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ── WelcomeModal ────────────────────────────────────────────── */
+    function WelcomeModal({ onComplete }) {
+      const [step, setStep] = useState(0);
+      const [geminiInput, setGeminiInput] = useState('');
+      const [anthropicInput, setAnthropicInput] = useState('');
+      const totalSteps = 3;
+
+      function finish() {
+        if (geminiInput.trim()) save('geminiKey', geminiInput.trim());
+        if (anthropicInput.trim()) save('apiKey', anthropicInput.trim());
+        save('welcomed', true);
+        onComplete();
+      }
+
+      return (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && step === 0 ? null : null}>
+          <div className="modal-card">
+            <div className="welcome-step-dots">
+              {[0, 1, 2].map(i => (
+                <div key={i} className={'welcome-dot' + (i <= step ? ' active' : '')} />
+              ))}
+            </div>
+
+            {step === 0 && (
+              <div className="fade-up" style={{ textAlign: 'center' }}>
+                <img src="writing.png" alt="한걸음" className="welcome-icon" />
+                <h1 className="serif" style={{ fontSize: 34, letterSpacing: '-0.02em', marginBottom: 4 }}>한걸음</h1>
+                <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 20, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
+                  Hangeoroeum
+                </p>
+                <p className="serif" style={{ fontSize: 18, color: 'var(--text-secondary)', lineHeight: 1.7, fontStyle: 'italic', marginBottom: 8 }}>
+                  Learn Korean, one phrase at a time.
+                </p>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7, marginTop: 16 }}>
+                  Each session drops you into a real scene — a cafe, a subway, a late-night market — and teaches you the phrases that matter. Spaced repetition does the rest.
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.6, marginTop: 12 }}>
+                  60 sessions. ~300 phrases. 2 minutes each.
+                </p>
+                <button className="btn-primary" onClick={() => setStep(1)} style={{ marginTop: 28 }}>
+                  Let's go
+                </button>
+              </div>
+            )}
+
+            {step === 1 && (
+              <div className="fade-up">
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 4, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
+                  Recommended
+                </p>
+                <label className="settings-label" style={{ fontSize: 16 }}>Gemini API Key</label>
+                <p className="settings-hint" style={{ marginBottom: 16 }}>
+                  Gives you natural-sounding Korean pronunciation. The free tier is all you need.
+                </p>
+                <input
+                  className="settings-input"
+                  type="password"
+                  placeholder="AIza..."
+                  value={geminiInput}
+                  onChange={e => setGeminiInput(e.target.value)}
+                  autoFocus
+                />
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.5 }}>
+                  Get one free at{' '}
+                  <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
+                    style={{ color: 'var(--accent-warm)', textDecoration: 'underline' }}>
+                    aistudio.google.com
+                  </a>
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
+                  <button className="btn-secondary" onClick={() => setStep(2)} style={{ flex: 1 }}>
+                    Skip for now
+                  </button>
+                  <button className="btn-primary" onClick={() => setStep(2)} style={{ flex: 1 }}
+                    disabled={!geminiInput.trim()}>
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="fade-up">
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 4, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
+                  Optional
+                </p>
+                <label className="settings-label" style={{ fontSize: 16 }}>Anthropic API Key</label>
+                <p className="settings-hint" style={{ marginBottom: 16 }}>
+                  After you finish all 60 sessions, this lets the app generate new personalized sessions for you with Claude.
+                </p>
+                <input
+                  className="settings-input"
+                  type="password"
+                  placeholder="sk-ant-..."
+                  value={anthropicInput}
+                  onChange={e => setAnthropicInput(e.target.value)}
+                  autoFocus
+                />
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.5 }}>
+                  You don't need this yet. You can always add it later in Settings.
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
+                  <button className="btn-secondary" onClick={finish} style={{ flex: 1 }}>
+                    Skip
+                  </button>
+                  <button className="btn-primary" onClick={finish} style={{ flex: 1 }}>
+                    Start learning
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ── App ──────────────────────────────────────────────────────── */
+    function App() {
+      // Auto-start: returning users go straight into a session (skip homescreen)
+      const _welcomed = load('welcomed', false);
+      const _savedCompleted = load('completedSessions', []);
+      const _hasRemaining = (window.SESSIONS || []).some(s => !_savedCompleted.includes(s.id));
+      const _shouldAutoStart = _welcomed && _savedCompleted.length > 0 && _hasRemaining;
+
+      const [view, setView] = useState(_shouldAutoStart ? 'session' : 'home');
+      const [completedSessions, setCompletedSessions] = useStorage('completedSessions', []);
+      const [mastery, setMastery] = useStorage('mastery', {});
+      const [streak, setStreak] = useStorage('streak', 0);
+      const [lastDate, setLastDate] = useStorage('lastSessionDate', null);
+      const [currentSessionId, setCurrentSessionId] = useState(() => {
+        if (!_shouldAutoStart) return null;
+        const aboutYou = load('aboutYou', '');
+        const interestMap = buildInterestMap(aboutYou);
+        const ordered = getOrderedSessions(_savedCompleted, interestMap);
+        if (ordered.length > 0) return ordered[0].id;
+        return 1;
+      });
+      const [showWelcome, setShowWelcome] = useState(() => !_welcomed);
+
+      function getNextId() {
+        const aboutYou = load('aboutYou', '');
+        const interestMap = buildInterestMap(aboutYou);
+        const ordered = getOrderedSessions(completedSessions, interestMap);
+        if (ordered.length > 0) return ordered[0].id;
+        // Fallback: sequential if all done
+        if (completedSessions.length === 0) return 1;
+        return Math.max(...completedSessions) + 1;
+      }
+
+      function startSession() {
+        setCurrentSessionId(getNextId());
+        setView('session');
+      }
+
+      function recordCompletion(sid) {
+        if (sid && !completedSessions.includes(sid)) {
+          setCompletedSessions(prev => [...prev, sid]);
+          const t = today();
+          if (lastDate !== t) {
+            const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+            setStreak(lastDate === yesterday ? s => s + 1 : 1);
+            setLastDate(t);
+          }
+        }
+      }
+
+      function finishSession() {
+        recordCompletion(currentSessionId);
+        setView('home');
+        setCurrentSessionId(null);
+      }
+
+      function handleMore() {
+        recordCompletion(currentSessionId);
+        // Use interest-aware ordering for next session
+        const updatedCompleted = [...completedSessions, currentSessionId].filter((v, i, a) => a.indexOf(v) === i);
+        const aboutYou = load('aboutYou', '');
+        const interestMap = buildInterestMap(aboutYou);
+        const ordered = getOrderedSessions(updatedCompleted, interestMap);
+        setCurrentSessionId(ordered.length > 0 ? ordered[0].id : (currentSessionId || 0) + 1);
+      }
+
+      function replaySession(sessionId) {
+        setCurrentSessionId(sessionId);
+        setView('session');
+      }
+
+      function exitSession() {
+        setView('home');
+        setCurrentSessionId(null);
+      }
+
+      if (showWelcome) {
+        return <WelcomeModal onComplete={() => setShowWelcome(false)} />;
+      }
+
+      if (view === 'settings') return <SettingsView onBack={() => setView('home')} />;
+      if (view === 'collection') {
+        return (
+          <CollectionView
+            completedSessions={completedSessions}
+            mastery={mastery}
+            onBack={() => setView('home')}
+            onStartSession={startSession}
+            onReplaySession={replaySession}
+          />
+        );
+      }
+      if (view === 'session' && currentSessionId) {
+        return (
+          <SessionView
+            key={currentSessionId}
+            sessionId={currentSessionId}
+            mastery={mastery}
+            setMastery={setMastery}
+            onFinish={finishSession}
+            onMore={handleMore}
+            onExit={exitSession}
+            onSettings={() => { recordCompletion(currentSessionId); setCurrentSessionId(null); setView('settings'); }}
+          />
+        );
+      }
+
+      return (
+        <HomeScreen
+          completedSessions={completedSessions}
+          mastery={mastery}
+          streak={streak}
+          onStartSession={startSession}
+          onCollection={() => setView('collection')}
+          onSettings={() => setView('settings')}
+        />
+      );
+    }
+
+    /* ── Mount ────────────────────────────────────────────────────── */
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+    /* ── Service Worker ───────────────────────────────────────────── */
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+
+    /* ── Preload voices (fallback) ────────────────────────────────── */
+    if (window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+  </script>
+</body>
+</html>
