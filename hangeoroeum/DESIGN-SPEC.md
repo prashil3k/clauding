@@ -292,6 +292,8 @@ After 60 pre-loaded sessions, generate new ones via Anthropic/Gemini API. Same f
 
 ### 10. AI-Personalized Sessions (The Big One)
 
+> **Note**: This is a directional idea, not a committed spec. If this approach doesn't pan out during implementation, it should not block the rest of the roadmap — the app works fine without it. The 60 hand-built sessions are the product; this is an enhancement layer. Try it, and if it works, the context below will be very useful for implementation.
+
 **This replaces the old "Decouple Topics from Difficulty" idea.** Manually creating every topic at every difficulty level would be too heavy and brittle. Instead:
 
 **The core insight**: The grammar curriculum is the skeleton. The topical content is just skin. AI can re-skin sessions to match any interest without touching the underlying structure.
@@ -315,6 +317,14 @@ After 60 pre-loaded sessions, generate new ones via Anthropic/Gemini API. Same f
 **Why this is better than manual topic×difficulty matrices**: Any language is ultimately phrases + meanings + cultural context. AI excels at generating contextually appropriate language content. Instead of hand-authoring 60×N variants, one AI generation pass handles infinite interest combinations. The framework just needs sessions structured so the topical layer is cleanly replaceable.
 
 **This is a large effort**, but it makes the app universally personalizable without exponential content authoring. Once built, it's more stable than maintaining hundreds of manual session variants.
+
+**Cost & model guidance (estimated)**:
+- ~48K tokens total for a full 60-session personalization run (500 input + 300 output per session)
+- **Gemini Flash**: Effectively free. Good first choice — Korean phrases are well within its capability since this is pattern-filling, not heavy reasoning.
+- **Claude Haiku 4.5**: ~$0.10 per run. Solid fallback if Gemini quality isn't sufficient.
+- **Claude Sonnet 4.6**: ~$0.36 per run. Overkill for bulk generation, but useful for quality-checking or edge cases.
+- **Time**: 15-30 seconds sequential, 5-10 seconds with parallel batching. Reasonable for a one-time "Generate My Plan" action behind a loading screen.
+- Korean learning phrases are extremely well-represented in all major model training data. The AI isn't inventing Korean — it's recombining known phrases into new topical contexts. Gap-filling (cultural nuance, natural phrasing, formality levels) is where it adds real value.
 
 ---
 
