@@ -90,10 +90,12 @@ Phrases are chunked in pairs: see 2 → test those 2. This prevents "I just saw 
 **Smart distractors**: Same-topic preference (+5), length similarity scoring (0-3), loanword overlap penalty (-10). Prevents giving away answers through obvious keyword matches.
 
 #### Beat 4: Mini-Dialogue (20 sec)
-3-line chat-bubble exchange using the session's phrases:
-- Line 1: Other speaker says a non-focus phrase
-- Line 2: "나" (me) says the focus phrase
-- Line 3: Other speaker responds with another non-focus phrase
+3-line chat-bubble exchange — user practices saying learned phrases in a natural A-B-A pattern:
+- Line 1: "나" (me) says the focus phrase
+- Line 2: Other speaker gives a natural topic-appropriate response (from `TOPIC_DIALOGUE_RESPONSES` map)
+- Line 3: "나" says a second learned phrase
+
+This ensures the user always speaks the learned phrases (not the other speaker). Response lines are short, natural Korean reactions per topic (e.g., 바리스타: "네, 잠시만요." at a café, 직원: "네, 알겠습니다." at a restaurant).
 
 Auto-play TTS chain — lines appear one by one as each audio finishes. Context-aware speaker labels (바리스타 for cafe, 직원 for restaurant/shopping, 기사님 for transit, 상대방 as default). Translation toggle available.
 
@@ -278,3 +280,29 @@ Persist audio to IndexedDB for true offline playback. Current: in-memory cache o
 
 ### 8. Social / Share
 Phrase cards designed to be screenshot-worthy for stories. Future: dedicated share/export feature for phrase cards.
+
+### 9. Session Chunking / Mini-Milestones
+Sessions currently run 15-32 exercises straight. For users with only 1-2 minutes, this is too long to feel "complete." Introduce mini-milestones every 8-10 cards — a brief visual checkpoint ("Nice, 10 done!") that gives a natural pause point. Users can stop and still feel accomplished, or continue into the next chunk. This supports the "sandwich" principle at a finer grain: even a bite should feel satisfying.
+
+### 10. Richer Dialogue Data
+Current dialogue uses a single generic response per topic (`TOPIC_DIALOGUE_RESPONSES`). Future: add proper dialogue pairs to session data — each phrase could have a `responseFrom` field indicating a natural reply from the other speaker. This would enable realistic multi-turn conversations instead of the current A → generic-B → A pattern. Could also enable dialogue-based exercises (fill in what the barista would say, etc.).
+
+---
+
+## Session Review Notes (2026-03-10)
+
+Context from first live testing session. These observations inform future priorities.
+
+### What works well
+- **Session exercise flow is solid.** 3 exercises on the focus phrase → paired introduction of new phrases → mixed review. The chunked interleaving is effective and doesn't feel repetitive in practice.
+- **Warmup beat is already active.** Returning sessions start with recognize/recall questions (not passive "see" cards), matching the ADHD-first principle.
+- **Exercise variety within a session is good.** ~17-22 exercises across 6 types (see, recognize, recall, fillin, listen, context) with smart distractors keeps it engaging.
+- **The "see" (SA) exercises are fine.** They're spaced out between active exercises, not clustered. For the first-ever session, starting with SA is appropriate since there's nothing to warm up with.
+
+### What was fixed
+- **Dialogue speaker assignment was backwards.** The old B-A-B pattern assigned learned phrases to the other speaker (e.g., barista saying "얼마예요?" instead of the customer). Fixed to A-B-A: user says learned phrases, other speaker gives a natural response.
+
+### What to address later (not blocking)
+- **32 cards per session is on the high side.** Not a problem for motivated sessions, but needs mini-milestones (see Roadmap #9) for users who only have 1 minute.
+- **Interest topic map is regex-only.** Works for common keywords but misses novel phrasing. AI-based mapping is a roadmap item (#2).
+- **No difficulty gating on interest reordering.** A user interested in philosophy could get TOPIK 2 sessions before finishing TOPIK 1 basics. Band-based reordering is roadmap item (#1).

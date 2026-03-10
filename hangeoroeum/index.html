@@ -1264,18 +1264,42 @@
     }
 
     /* ── DialogueBeat (between Phrases and Takeaway) ─────────────── */
+    // Natural response lines from the other speaker, per topic
+    const TOPIC_DIALOGUE_RESPONSES = {
+      cafe: { korean: '네, 잠시만요.', english: 'Yes, one moment.' },
+      convenience: { korean: '네, 여기 있어요.', english: 'Yes, here it is.' },
+      restaurant: { korean: '네, 알겠습니다.', english: 'Yes, understood.' },
+      transit: { korean: '네, 맞아요.', english: 'Yes, that\'s right.' },
+      shopping: { korean: '네, 그럼요.', english: 'Yes, of course.' },
+      daily: { korean: '아, 그래요?', english: 'Oh, really?' },
+      movies: { korean: '맞아요, 저도요.', english: 'Right, me too.' },
+      music: { korean: '오, 진짜요?', english: 'Oh, really?' },
+      feelings: { korean: '그렇구나.', english: 'I see.' },
+      weather: { korean: '그러게요.', english: 'I know, right.' },
+      work: { korean: '네, 확인할게요.', english: 'Yes, I\'ll check.' },
+      opinions: { korean: '그렇게 생각해요?', english: 'You think so?' },
+      kdrama: { korean: '맞아, 맞아.', english: 'Right, right.' },
+      'food-culture': { korean: '맛있죠?', english: 'It\'s good, right?' },
+      philosophy: { korean: '흥미롭네요.', english: 'That\'s interesting.' },
+      health: { korean: '맞아요, 중요해요.', english: 'Right, it\'s important.' },
+      climbing: { korean: '조심하세요.', english: 'Be careful.' },
+      travel: { korean: '네, 이쪽이에요.', english: 'Yes, this way.' },
+      books: { korean: '오, 좋은 책이에요.', english: 'Oh, that\'s a good book.' },
+      texting: { korean: 'ㅋㅋ 그러게.', english: 'Lol, right.' }
+    };
+
     function DialogueBeat({ session, onContinue, onExit, onSettings }) {
       const phrases = session.phrases;
       const lines = useMemo(() => {
-        // Pick 3 phrases that form a natural exchange (focus + 2 others)
+        // A-B-A pattern: user says learned phrases, other speaker responds naturally
         const focusIdx = session.focusIndex || 0;
         const focus = phrases[focusIdx];
         const others = phrases.filter((_, i) => i !== focusIdx);
-        // Use up to 3 lines: other, focus, other — like a real conversation
+        const response = TOPIC_DIALOGUE_RESPONSES[session.topic] || { korean: '네.', english: 'Yes.' };
         const picked = [];
-        if (others[0]) picked.push({ speaker: 'B', phrase: others[0] });
         picked.push({ speaker: 'A', phrase: focus });
-        if (others[1]) picked.push({ speaker: 'B', phrase: others[1] });
+        picked.push({ speaker: 'B', phrase: response });
+        if (others[0]) picked.push({ speaker: 'A', phrase: others[0] });
         return picked;
       }, [session.id]);
 
