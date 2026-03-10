@@ -401,45 +401,56 @@
       return new Blob([buf], { type: 'audio/wav' });
     }
 
-    /* ── Gemini TTS Call ─────────────────────────────────────────── */
-    async function callGeminiTTS(text, apiKey, model, voice) {
+    /* ── Gemini TTS Call (with retry) ─────────────────────────────── */
+    async function callGeminiTTS(text, apiKey, model, voice, retries = 1) {
       const cacheKey = text + '|' + voice + '|' + model;
       if (audioCache[cacheKey]) return audioCache[cacheKey];
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text }] }],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: voice }
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text }] }],
+              generationConfig: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: voice }
+                  }
+                }
               }
-            }
+            })
+          });
+
+          if (!resp.ok) {
+            const err = await resp.text().catch(() => '');
+            throw new Error(`TTS API ${resp.status}: ${err.slice(0, 200)}`);
           }
-        })
-      });
 
-      if (!resp.ok) {
-        const err = await resp.text().catch(() => '');
-        throw new Error(`TTS API ${resp.status}: ${err.slice(0, 200)}`);
+          const data = await resp.json();
+          const part = data?.candidates?.[0]?.content?.parts?.[0];
+          if (!part?.inlineData?.data) throw new Error('No audio in response');
+
+          const wavBlob = pcmToWav(part.inlineData.data);
+          const blobUrl = URL.createObjectURL(wavBlob);
+          audioCache[cacheKey] = blobUrl;
+          return blobUrl;
+        } catch (e) {
+          if (attempt < retries) {
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
+          throw e;
+        }
       }
-
-      const data = await resp.json();
-      const part = data?.candidates?.[0]?.content?.parts?.[0];
-      if (!part?.inlineData?.data) throw new Error('No audio in response');
-
-      const wavBlob = pcmToWav(part.inlineData.data);
-      const blobUrl = URL.createObjectURL(wavBlob);
-      audioCache[cacheKey] = blobUrl;
-      return blobUrl;
     }
 
     /* ── TTS with fallback ───────────────────────────────────────── */
     let currentAudio = null;
+    let lastTtsSource = 'none'; // 'gemini' | 'gemini-fallback' | 'web-speech' | 'none'
 
     function playAudioToEnd(audio) {
       return new Promise((resolve) => {
@@ -456,26 +467,29 @@
       const voice = load('ttsVoice', DEFAULT_VOICE);
 
       if (apiKey) {
+        // Try primary model (with 1 retry built into callGeminiTTS)
         try {
-          const url = await callGeminiTTS(text, apiKey, model, voice);
+          const url = await callGeminiTTS(text, apiKey, model, voice, 1);
           currentAudio = new Audio(url);
           const endPromise = playAudioToEnd(currentAudio);
           await currentAudio.play();
+          lastTtsSource = 'gemini';
           await endPromise;
           return;
         } catch (e) {
-          console.warn('Gemini TTS failed, trying fallback:', e.message);
+          console.warn('Gemini TTS failed (with retry), trying fallback model:', e.message);
           const fallback = MODEL_FALLBACKS[model];
           if (fallback) {
             try {
-              const url = await callGeminiTTS(text, apiKey, fallback, voice);
+              const url = await callGeminiTTS(text, apiKey, fallback, voice, 1);
               currentAudio = new Audio(url);
               const endPromise = playAudioToEnd(currentAudio);
               await currentAudio.play();
+              lastTtsSource = 'gemini-fallback';
               await endPromise;
               return;
             } catch (e2) {
-              console.warn('Fallback TTS also failed:', e2.message);
+              console.warn('Fallback model also failed:', e2.message);
             }
           }
         }
@@ -490,9 +504,13 @@
         const voices = window.speechSynthesis.getVoices();
         const ko = voices.find(v => v.lang.startsWith('ko'));
         if (ko) u.voice = ko;
+        lastTtsSource = 'web-speech';
         await new Promise((resolve) => {
           u.onend = resolve;
-          u.onerror = resolve;
+          u.onerror = () => {
+            lastTtsSource = 'none';
+            resolve();
+          };
           window.speechSynthesis.speak(u);
         });
       }
@@ -505,7 +523,11 @@
       const model = load('ttsModel', DEFAULT_TTS_MODEL);
       const voice = load('ttsVoice', DEFAULT_VOICE);
       session.phrases.forEach(p => {
-        callGeminiTTS(p.korean, apiKey, model, voice).catch(() => {});
+        callGeminiTTS(p.korean, apiKey, model, voice, 1).catch(() => {
+          // If primary fails during prefetch, try fallback model too
+          const fallback = MODEL_FALLBACKS[model];
+          if (fallback) callGeminiTTS(p.korean, apiKey, fallback, voice, 0).catch(() => {});
+        });
       });
     }
 
@@ -723,20 +745,28 @@
     /* ── SpeakerButton ────────────────────────────────────────────── */
     function SpeakerButton({ text }) {
       const [loading, setLoading] = useState(false);
+      const [usedFallback, setUsedFallback] = useState(false);
 
       async function handleClick(e) {
         e.stopPropagation();
         setLoading(true);
+        setUsedFallback(false);
         try {
           await speakKorean(text);
+          if (lastTtsSource === 'web-speech') setUsedFallback(true);
         } catch {}
         setLoading(false);
       }
 
       return (
-        <button className={'speaker-btn' + (loading ? ' loading' : '')} onClick={handleClick} aria-label="Listen">
-          <SpeakerIcon />
-        </button>
+        <span style={{ position: 'relative', display: 'inline-flex' }}>
+          <button className={'speaker-btn' + (loading ? ' loading' : '')} onClick={handleClick} aria-label="Listen">
+            <SpeakerIcon />
+          </button>
+          {usedFallback && (
+            <span style={{ position: 'absolute', top: -2, right: -2, width: 6, height: 6, borderRadius: '50%', background: 'var(--incorrect)', opacity: 0.7 }} title="Using basic TTS — add Gemini key for natural audio" />
+          )}
+        </span>
       );
     }
 
@@ -903,6 +933,31 @@
       );
     }
 
+    /* ── Fill-in-the-blank helpers ─────────────────────────────────── */
+    function makeBlankExercise(phrase) {
+      const words = phrase.korean.replace(/[.,!?]/g, '').split(/\s+/).filter(w => w.length > 0);
+      if (words.length < 2) return null;
+      // Pick a non-trivial word to blank out (skip very short particles)
+      const candidates = words.filter(w => w.length >= 2);
+      if (candidates.length === 0) return null;
+      const blankedWord = candidates[Math.floor(Math.random() * candidates.length)];
+      const blankedSentence = phrase.korean.replace(blankedWord, '______');
+      // Generate distractors from other words in the session's phrases
+      const allWords = ALL_PHRASES
+        .flatMap(p => p.korean.replace(/[.,!?]/g, '').split(/\s+/))
+        .filter(w => w.length >= 2 && w !== blankedWord);
+      const uniqueWords = [...new Set(allWords)];
+      // Prefer words of similar length
+      uniqueWords.sort((a, b) => {
+        const diffA = Math.abs(a.length - blankedWord.length);
+        const diffB = Math.abs(b.length - blankedWord.length);
+        return diffA - diffB;
+      });
+      const distractors = uniqueWords.slice(0, 12);
+      const picked = shuffle(distractors).slice(0, 3);
+      return { blankedSentence, blankedWord, distractors: picked };
+    }
+
     /* ── PhraseExercise (single phrase, single step) ──────────────── */
     function PhraseExercise({ phrase, step, onNext, sessionTopic }) {
       const [revealed, setRevealed] = useState(false);
@@ -974,8 +1029,49 @@
         );
       }
 
+      if (step === 'fillin') {
+        // Fill-in-the-blank: show Korean sentence with a word missing, pick the correct word
+        const blankData = useMemo(() => makeBlankExercise(phrase), [phrase.id]);
+        if (!blankData) {
+          // Fallback to recall if sentence too short to blank
+          const distractors = useMemo(() => getDistractors(phrase, 'korean', 3, sessionTopic), [phrase.id]);
+          const options = useMemo(() => shuffle([phrase.korean, ...distractors]), [phrase.id]);
+          const correctIndex = options.indexOf(phrase.korean);
+          return (
+            <div className="fade-up" style={{ padding: '24px 0' }}>
+              <KoreanPrompt korean="어떻게 말해요?" english="How do you say this?" />
+              <p style={{ fontSize: 18, marginBottom: 28, lineHeight: 1.5 }}>{phrase.english}</p>
+              <MultipleChoice
+                options={options}
+                correctIndex={correctIndex}
+                onAnswer={correct => onNext(correct ? 5 : 2)}
+                isKorean={true}
+                koreanText={phrase.korean}
+              />
+            </div>
+          );
+        }
+        const options = useMemo(() => shuffle([blankData.blankedWord, ...blankData.distractors]), [phrase.id]);
+        const correctIndex = options.indexOf(blankData.blankedWord);
+        return (
+          <div className="fade-up" style={{ padding: '24px 0' }}>
+            <KoreanPrompt korean="빈칸을 채우세요" english="Fill in the blank" />
+            <div style={{ marginBottom: 12 }}>
+              <p className="korean-large" style={{ lineHeight: 1.6 }}>{blankData.blankedSentence}</p>
+            </div>
+            <p className="english-sub" style={{ marginBottom: 28 }}>{phrase.english}</p>
+            <MultipleChoice
+              options={options}
+              correctIndex={correctIndex}
+              onAnswer={correct => onNext(correct ? 5 : 2)}
+              isKorean={true}
+              koreanText={phrase.korean}
+            />
+          </div>
+        );
+      }
+
       if (step === 'listen') {
-        // Listen-first: hear the audio, pick the English meaning (no Korean text shown)
         const distractors = useMemo(() => getDistractors(phrase, 'english', 3, sessionTopic), [phrase.id]);
         const options = useMemo(() => shuffle([phrase.english, ...distractors]), [phrase.id]);
         const correctIndex = options.indexOf(phrase.english);
@@ -1011,7 +1107,6 @@
       }
 
       if (step === 'context') {
-        // Context matching: show the situational context, pick which Korean phrase fits
         const distractors = useMemo(() => getDistractors(phrase, 'korean', 3, sessionTopic), [phrase.id]);
         const options = useMemo(() => shuffle([phrase.korean, ...distractors]), [phrase.id]);
         const correctIndex = options.indexOf(phrase.korean);
@@ -1039,7 +1134,10 @@
       return null;
     }
 
-    /* ── PhraseBeat (Beat 2) ──────────────────────────────────────── */
+    /* ── PhraseBeat (Beat 2) — Micro-learning loops ──────────────── */
+    /* Each phrase: see → recognize → recall/fillin (learn one, test one)
+       Focus phrase gets extra: listen + context
+       End: mixed review round with all phrases shuffled */
     function PhraseBeat({ session, onComplete, mastery, setMastery, onExit, onSettings }) {
       const phrases = session.phrases;
       const focusIdx = session.focusIndex || 0;
@@ -1049,23 +1147,37 @@
         const focus = phrases[focusIdx];
         const others = phrases.filter((_, i) => i !== focusIdx);
 
-        // Warm-up is now its own beat (WarmupBeat) before the scene.
-        // PhraseBeat starts with introducing new phrases.
-
-        // Phase 1: Reveal — show focus phrase + all non-focus phrases
+        // ── Micro-loop: Focus phrase first (introduce → test immediately) ──
         seq.push({ phrase: focus, step: 'see' });
-        others.forEach(p => seq.push({ phrase: p, step: 'see' }));
+        seq.push({ phrase: focus, step: 'recognize' });
+        seq.push({ phrase: focus, step: 'fillin' });
 
-        // Phase 2: Test — recognize all phrases (shuffled, focus included)
-        shuffle([...phrases]).forEach(p => seq.push({ phrase: p, step: 'recognize' }));
+        // ── Micro-loops: Other phrases, 2 at a time ──
+        // Pair them up so you learn 2, then get tested on those 2
+        for (let i = 0; i < others.length; i += 2) {
+          const chunk = others.slice(i, i + 2);
+          // See both phrases in the chunk
+          chunk.forEach(p => seq.push({ phrase: p, step: 'see' }));
+          // Immediately test both (shuffled exercises)
+          const chunkExercises = [];
+          chunk.forEach(p => {
+            chunkExercises.push({ phrase: p, step: 'recognize' });
+            chunkExercises.push({ phrase: p, step: Math.random() > 0.5 ? 'recall' : 'fillin' });
+          });
+          shuffle(chunkExercises).forEach(e => seq.push(e));
+        }
 
-        // Phase 3: Final mixed recall — all phrases, diverse exercise types
-        const mixedTypes = ['recall', 'listen', 'context'];
-        const finalPhrases = shuffle([...phrases]);
-        finalPhrases.forEach((p, i) => {
-          const step = (p.id === focus.id) ? 'recall' : mixedTypes[i % mixedTypes.length];
-          seq.push({ phrase: p, step });
+        // ── Focus phrase extra practice (harder exercises) ──
+        seq.push({ phrase: focus, step: 'listen' });
+        seq.push({ phrase: focus, step: 'context' });
+
+        // ── Final mixed review: all phrases, diverse types ──
+        const reviewTypes = ['recall', 'fillin', 'listen', 'context'];
+        const reviewPhrases = shuffle([...phrases]);
+        reviewPhrases.forEach((p, i) => {
+          seq.push({ phrase: p, step: reviewTypes[i % reviewTypes.length] });
         });
+
         return seq;
       }, [session.id]);
 
@@ -1613,6 +1725,111 @@
       );
     }
 
+    /* ── LessonPlanView ───────────────────────────────────────────── */
+    function LessonPlanView({ completedSessions, onBack, onStartSession }) {
+      const sessions = window.SESSIONS || [];
+
+      // Group sessions by topic
+      const grouped = useMemo(() => {
+        const map = {};
+        const order = [];
+        sessions.forEach(s => {
+          if (!map[s.topic]) {
+            map[s.topic] = { topic: s.topic, topicKorean: s.topicKorean, level: s.level, sessions: [] };
+            order.push(s.topic);
+          }
+          map[s.topic].sessions.push(s);
+        });
+        return order.map(t => map[t]);
+      }, []);
+
+      const totalCompleted = completedSessions.length;
+      const totalSessions = sessions.length;
+
+      return (
+        <div className="app-container">
+          <div className="top-bar">
+            <button className="btn-ghost" onClick={onBack} style={{ marginLeft: -12 }}>
+              <BackIcon />
+            </button>
+            <span className="top-bar-title serif" style={{ fontSize: 20 }}>수업 목록</span>
+            <div style={{ width: 44 }} />
+          </div>
+          <div className="scroll-area">
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                {totalCompleted} / {totalSessions} sessions
+              </span>
+              <div className="progress-track" style={{ flex: 1, height: 4 }}>
+                <div className="progress-fill" style={{ width: ((totalCompleted / totalSessions) * 100) + '%' }} />
+              </div>
+            </div>
+
+            {grouped.map((group, gi) => {
+              const completedInGroup = group.sessions.filter(s => completedSessions.includes(s.id)).length;
+              const isTopik2 = group.level === 'topik2';
+              const allDone = completedInGroup === group.sessions.length;
+              return (
+                <div key={group.topic} style={{ marginBottom: 20 }}>
+                  {gi === 0 && (
+                    <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 16, marginBottom: 8 }}>
+                      TOPIK 1 — Elementary
+                    </p>
+                  )}
+                  {group.sessions[0]?.id === 41 && (
+                    <div style={{ marginTop: 20, marginBottom: 12 }}>
+                      <div className="divider" />
+                      <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 12, marginBottom: 8 }}>
+                        TOPIK 2 — Intermediate
+                      </p>
+                    </div>
+                  )}
+                  <div style={{
+                    background: allDone ? 'var(--correct-bg)' : 'var(--surface)',
+                    borderRadius: 12, padding: '12px 16px',
+                    borderLeft: allDone ? '3px solid var(--correct)' : '3px solid var(--border)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div>
+                        <span className="korean" style={{ fontSize: 15, fontWeight: 500 }}>{group.topicKorean}</span>
+                        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 8 }}>{TOPIC_ENGLISH[group.topic] || group.topic}</span>
+                      </div>
+                      <span style={{ fontSize: 12, color: allDone ? 'var(--correct)' : 'var(--text-tertiary)', fontWeight: 500 }}>
+                        {completedInGroup}/{group.sessions.length}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {group.sessions.map(s => {
+                        const done = completedSessions.includes(s.id);
+                        const focusPhrase = s.phrases[s.focusIndex || 0];
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => onStartSession(s.id)}
+                            title={focusPhrase.korean + ' — ' + focusPhrase.english}
+                            style={{
+                              padding: '4px 10px', fontSize: 12, borderRadius: 6, border: 'none',
+                              background: done ? 'var(--correct)' : 'white',
+                              color: done ? 'white' : 'var(--text-secondary)',
+                              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
+                              transition: 'background 0.15s',
+                              opacity: done ? 1 : 0.8
+                            }}
+                          >
+                            {s.id}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     /* ── SettingsView ─────────────────────────────────────────────── */
     function SettingsView({ onBack }) {
       const [geminiKey, setGeminiKey] = useStorage('geminiKey', '');
@@ -1922,7 +2139,7 @@
     }
 
     /* ── HomeScreen ───────────────────────────────────────────────── */
-    function HomeScreen({ completedSessions, mastery, streak, onStartSession, onCollection, onSettings }) {
+    function HomeScreen({ completedSessions, mastery, streak, onStartSession, onCollection, onSettings, onLessonPlan }) {
       const sessions = window.SESSIONS || [];
       const totalPhrases = completedSessions.reduce((acc, sid) => {
         const s = sessions.find(x => x.id === sid);
@@ -1986,6 +2203,9 @@
                   ~2 minutes per session
                 </p>
               )}
+              <button className="btn-ghost" onClick={onLessonPlan} style={{ marginTop: 12, width: '100%', textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)' }}>
+                수업 목록 <span style={{ opacity: 0.5, fontSize: 11 }}>Lesson plan</span>
+              </button>
             </div>
 
             {recentPhrases.length > 0 && (
@@ -2216,6 +2436,15 @@
       }
 
       if (view === 'settings') return <SettingsView onBack={() => setView('home')} />;
+      if (view === 'lessonplan') {
+        return (
+          <LessonPlanView
+            completedSessions={completedSessions}
+            onBack={() => setView('home')}
+            onStartSession={replaySession}
+          />
+        );
+      }
       if (view === 'collection') {
         return (
           <CollectionView
@@ -2250,6 +2479,7 @@
           onStartSession={startSession}
           onCollection={() => setView('collection')}
           onSettings={() => setView('settings')}
+          onLessonPlan={() => setView('lessonplan')}
         />
       );
     }
