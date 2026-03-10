@@ -358,7 +358,8 @@
     /* ── Gemini TTS Constants ────────────────────────────────────── */
     const KNOWN_TTS_MODELS = [
       'gemini-2.5-flash-preview-tts',
-      'gemini-2.0-flash-lite-preview-tts',
+      'gemini-2.5-flash-lite-preview-tts',
+      'gemini-2.5-pro-preview-tts',
     ];
     const DEFAULT_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
     const TTS_VOICES = [
@@ -370,9 +371,23 @@
     ];
     const DEFAULT_VOICE = 'Kore';
     const MODEL_FALLBACKS = {
-      'gemini-2.5-flash-preview-tts': 'gemini-2.0-flash-lite-preview-tts',
-      'gemini-2.0-flash-lite-preview-tts': null,
+      'gemini-2.5-flash-preview-tts': 'gemini-2.5-flash-lite-preview-tts',
+      'gemini-2.5-flash-lite-preview-tts': 'gemini-2.5-pro-preview-tts',
+      'gemini-2.5-pro-preview-tts': 'gemini-2.5-flash-lite-preview-tts',
     };
+
+    /* ── Migrate stale TTS model names ─────────────────────────── */
+    (() => {
+      const saved = load('ttsModel', '');
+      if (saved && !KNOWN_TTS_MODELS.includes(saved)) {
+        save('ttsModel', DEFAULT_TTS_MODEL);
+      }
+      const savedModels = load('ttsModels', null);
+      if (savedModels) {
+        const cleaned = savedModels.filter(m => !m.includes('2.0-flash-lite'));
+        if (cleaned.length !== savedModels.length) save('ttsModels', cleaned.length > 0 ? cleaned : KNOWN_TTS_MODELS);
+      }
+    })();
 
     /* ── Audio cache ─────────────────────────────────────────────── */
     const audioCache = {};
@@ -1842,15 +1857,59 @@
       const [geminiInput, setGeminiInput] = useState(geminiKey);
       const [anthropicInput, setAnthropicInput] = useState(anthropicKey);
       const [aboutInput, setAboutInput] = useState(aboutYou);
-      const [saved, setSaved] = useState(null); // 'gemini' | 'anthropic' | 'about' | null
+      const [saved, setSaved] = useState(null); // 'gemini' | 'gemini-error' | 'anthropic' | 'about' | null
       const [detecting, setDetecting] = useState(false);
       const [detectMsg, setDetectMsg] = useState('');
       const [testPlaying, setTestPlaying] = useState(false);
+      const [geminiStatus, setGeminiStatus] = useState(''); // 'validating' | 'valid' | error message
 
-      function saveGemini() {
-        setGeminiKey(geminiInput.trim());
-        setSaved('gemini');
-        setTimeout(() => setSaved(null), 2000);
+      async function saveGemini() {
+        const key = geminiInput.trim();
+        if (!key) {
+          setGeminiKey('');
+          setSaved('gemini');
+          setGeminiStatus('');
+          setTimeout(() => setSaved(null), 2000);
+          return;
+        }
+        setGeminiStatus('validating');
+        // Validate by trying to list models
+        try {
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+          if (!resp.ok) {
+            const err = await resp.text().catch(() => '');
+            if (resp.status === 400 || resp.status === 403) {
+              setGeminiStatus('Invalid API key');
+              setSaved('gemini-error');
+              setTimeout(() => setSaved(null), 4000);
+              return;
+            }
+            throw new Error(`API ${resp.status}`);
+          }
+          const data = await resp.json();
+          const models = (data.models || [])
+            .map(m => m.name.replace('models/', ''))
+            .filter(n => n.includes('tts'));
+          if (models.length > 0) {
+            const known = KNOWN_TTS_MODELS.filter(m => models.includes(m));
+            const extra = models.filter(m => !KNOWN_TTS_MODELS.includes(m));
+            const allModels = [...known, ...extra];
+            setAvailableModels(allModels);
+            if (!allModels.includes(ttsModel)) setTtsModel(allModels[0]);
+            setGeminiStatus(`Key valid — ${allModels.length} TTS model${allModels.length > 1 ? 's' : ''} found`);
+          } else {
+            setGeminiStatus('Key valid — no TTS models found (check API access)');
+          }
+          setGeminiKey(key);
+          setSaved('gemini');
+          setTimeout(() => setSaved(null), 2000);
+          setTimeout(() => setGeminiStatus(''), 6000);
+        } catch (e) {
+          setGeminiStatus('Could not validate key — saved anyway');
+          setGeminiKey(key);
+          setSaved('gemini');
+          setTimeout(() => { setSaved(null); setGeminiStatus(''); }, 4000);
+        }
       }
 
       function saveAnthropic() {
@@ -1886,11 +1945,22 @@
         setTimeout(() => setDetectMsg(''), 4000);
       }
 
+      const [ttsTestResult, setTtsTestResult] = useState('');
+
       async function testVoice() {
         setTestPlaying(true);
-        try { await speakKorean('안녕하세요'); }
-        catch {}
+        setTtsTestResult('');
+        try {
+          await speakKorean('안녕하세요');
+          if (lastTtsSource === 'gemini') setTtsTestResult('Gemini TTS working');
+          else if (lastTtsSource === 'gemini-fallback') setTtsTestResult('Playing via fallback model');
+          else if (lastTtsSource === 'web-speech') setTtsTestResult('Fell back to basic TTS — check API key & model');
+          else setTtsTestResult('No audio played');
+        } catch {
+          setTtsTestResult('Audio playback failed');
+        }
         setTestPlaying(false);
+        setTimeout(() => setTtsTestResult(''), 5000);
       }
 
       const DATA_KEYS = ['completedSessions', 'mastery', 'streak', 'lastSessionDate',
@@ -1980,11 +2050,25 @@
                 <button
                   className="btn-primary"
                   onClick={saveGemini}
-                  style={{ flex: 1, padding: '12px 16px', fontSize: 14, background: saved === 'gemini' ? 'var(--correct)' : undefined }}
+                  disabled={geminiStatus === 'validating'}
+                  style={{
+                    flex: 1, padding: '12px 16px', fontSize: 14,
+                    background: saved === 'gemini' ? 'var(--correct)' : saved === 'gemini-error' ? 'var(--incorrect)' : undefined,
+                    opacity: geminiStatus === 'validating' ? 0.7 : 1
+                  }}
                 >
-                  {saved === 'gemini' ? 'Saved' : 'Save Key'}
+                  {geminiStatus === 'validating' ? 'Validating...' : saved === 'gemini' ? 'Saved' : saved === 'gemini-error' ? 'Invalid Key' : 'Save Key'}
                 </button>
               </div>
+              {geminiStatus && geminiStatus !== 'validating' && (
+                <p className="detect-status" style={{
+                  marginTop: 6,
+                  color: geminiStatus.includes('valid') || geminiStatus.includes('found')
+                    ? 'var(--correct)' : 'var(--incorrect)'
+                }}>
+                  {geminiStatus}
+                </p>
+              )}
             </div>
 
             {/* TTS Model */}
@@ -2034,6 +2118,14 @@
                   {testPlaying ? '...' : '▶ Test'}
                 </button>
               </div>
+              {ttsTestResult && (
+                <p className="detect-status" style={{
+                  marginTop: 6,
+                  color: ttsTestResult.includes('working') ? 'var(--correct)' : 'var(--incorrect)'
+                }}>
+                  {ttsTestResult}
+                </p>
+              )}
             </div>
 
             <div className="divider" style={{ margin: '8px 0 24px' }} />
