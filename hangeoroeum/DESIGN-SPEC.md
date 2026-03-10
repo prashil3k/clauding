@@ -257,23 +257,29 @@ Two-tab view: **표현/Phrases** (phrase library) and **수업/Sessions** (sessi
 
 ## Future Roadmap
 
-### 1. Band-Based Interest Reordering (Difficulty Gating)
+Ordered by priority. Items 1-2 are next-session targets. Items 3-5 are medium-term. Items 6-9 are longer-term. Item 10 is the big architectural bet.
+
+### 1. Session Checkpoints (Mini-Milestones) — HIGH PRIORITY
+Sessions currently run 15-32 exercises straight. For users with only 1-2 minutes, this is too long to feel "complete."
+
+**Fix**: Every 8 cards, the app hits a **real checkpoint** — progress is **saved to localStorage** at that point. If the user closes the app at card 8, they resume at card 9, not card 1. This is not an affirmation screen or a "great job!" moment. It's a persistent save point that makes 1-minute sessions viable.
+
+The checkpoint UI should be minimal — just a brief visual pause that signals "your progress is saved, you can stop here or keep going." No fake encouragement. The value is practical: shorter commitment windows without losing progress.
+
+### 2. Band-Based Interest Reordering (Difficulty Gating) — HIGH PRIORITY
 Interest-based session reordering currently ignores difficulty. Fix: divide sessions into difficulty bands (e.g., 1-20, 21-40, 41-60) and only reorder within each band. Complete all of band 1 (in your preferred interest order) before moving to band 2. This preserves easy→hard progression while letting interests influence order within each tier.
 
-### 2. AI-Powered Interest Mapping
+### 3. Richer Dialogue Data
+Current dialogue uses a single generic response per topic (`TOPIC_DIALOGUE_RESPONSES`). Future: add proper dialogue pairs to session data — each phrase could have a `responseFrom` field indicating a natural reply from the other speaker. This would enable realistic multi-turn conversations instead of the current A → generic-B → A pattern. Could also enable dialogue-based exercises (fill in what the barista would say, etc.).
+
+### 4. AI-Powered Interest Mapping
 Current interest extraction uses hardcoded keyword lists — novel interests (not in `TOPIC_KEYWORDS`) get no matches. Fix: use Gemini/Claude to interpret freeform "About You" text and map it to topic relevance scores. Would handle any interest, not just pre-mapped ones.
 
-### 3. Learning Journey / Progress Path
-Show where you are in a non-overwhelming way. Chess app pattern: 3-4 upcoming checkpoints visible, scrollable for the rest. Minimal and editorial, no cartoon trains.
-
-### 4. Richer Session Content
+### 5. Richer Session Content
 Grammar examples in context (not drills). Vocab reinforcement from multiple angles. Multiple practice patterns around the same grammar point. The phrase is still the atom, but grammar + vocab repetition builds fluency.
 
-### 5. Decouple Topics from Difficulty
-Currently cafe = TOPIK 1, climbing = TOPIK 2. Every topic should span both TOPIK levels. Survival topics shouldn't be locked behind progress. Grammar/vocab difficulty should be independent of scene topic.
-
-### 6. AI Session Generation
-After 60 pre-loaded sessions, generate new ones via Anthropic/Gemini API. Same format (scene + 5 phrases + focus phrase). Personalized to interest map and weak areas from mastery data.
+### 6. Learning Journey / Progress Path
+Show where you are in a non-overwhelming way. Chess app pattern: 3-4 upcoming checkpoints visible, scrollable for the rest. Minimal and editorial, no cartoon trains.
 
 ### 7. TTS Persistence
 Persist audio to IndexedDB for true offline playback. Current: in-memory cache only, lost on page reload.
@@ -281,11 +287,34 @@ Persist audio to IndexedDB for true offline playback. Current: in-memory cache o
 ### 8. Social / Share
 Phrase cards designed to be screenshot-worthy for stories. Future: dedicated share/export feature for phrase cards.
 
-### 9. Session Chunking / Mini-Milestones
-Sessions currently run 15-32 exercises straight. For users with only 1-2 minutes, this is too long to feel "complete." Introduce mini-milestones every 8-10 cards — a brief visual checkpoint ("Nice, 10 done!") that gives a natural pause point. Users can stop and still feel accomplished, or continue into the next chunk. This supports the "sandwich" principle at a finer grain: even a bite should feel satisfying.
+### 9. AI Session Generation (Post-60)
+After 60 pre-loaded sessions, generate new ones via Anthropic/Gemini API. Same format (scene + 5 phrases + focus phrase). Personalized to interest map and weak areas from mastery data. Depends on getting the first 60 sessions solid first.
 
-### 10. Richer Dialogue Data
-Current dialogue uses a single generic response per topic (`TOPIC_DIALOGUE_RESPONSES`). Future: add proper dialogue pairs to session data — each phrase could have a `responseFrom` field indicating a natural reply from the other speaker. This would enable realistic multi-turn conversations instead of the current A → generic-B → A pattern. Could also enable dialogue-based exercises (fill in what the barista would say, etc.).
+### 10. AI-Personalized Sessions (The Big One)
+
+**This replaces the old "Decouple Topics from Difficulty" idea.** Manually creating every topic at every difficulty level would be too heavy and brittle. Instead:
+
+**The core insight**: The grammar curriculum is the skeleton. The topical content is just skin. AI can re-skin sessions to match any interest without touching the underlying structure.
+
+**Two-tier content model**:
+- **Default tier (no AI, no API, always works)**: The 60 hand-built sessions ship with the app. Someone who never touches "About You" gets a complete, functional Korean learning experience. These sessions are never deleted or hidden.
+- **Personalized tier (opt-in, API-dependent)**: When a user fills out their About You section and hits a **"Generate My Plan"** button, an API call fires. The AI reads their interests, looks at all the grammar points and phrase patterns across the curriculum, and generates new personalized session content. Session 12 still teaches the same grammar pattern, but for a climber it uses mountain vocabulary, for a foodie it uses restaurant vocabulary.
+
+**What the AI does**:
+1. Reads the About You text + the full grammar/phrase curriculum
+2. Maps interests to topical vocabulary and scenarios
+3. Generates personalized scenes, phrases, and context — all fitted to the existing session structure
+4. Preserves all essential/survival content (ordering food, asking directions, etc.) regardless of interests
+5. Populates the personalized session plan
+
+**What it does NOT do**:
+- Override essentials. Core phrases ("화장실 어디예요?", "이거 얼마예요?") stay no matter what your interests are.
+- Replace the default content. Personalized sessions are layered alongside, not instead of.
+- Work silently. The generation takes real time and real API credits. The user should see a loading state and understand that something substantial is happening.
+
+**Why this is better than manual topic×difficulty matrices**: Any language is ultimately phrases + meanings + cultural context. AI excels at generating contextually appropriate language content. Instead of hand-authoring 60×N variants, one AI generation pass handles infinite interest combinations. The framework just needs sessions structured so the topical layer is cleanly replaceable.
+
+**This is a large effort**, but it makes the app universally personalizable without exponential content authoring. Once built, it's more stable than maintaining hundreds of manual session variants.
 
 ---
 
@@ -303,6 +332,6 @@ Context from first live testing session. These observations inform future priori
 - **Dialogue speaker assignment was backwards.** The old B-A-B pattern assigned learned phrases to the other speaker (e.g., barista saying "얼마예요?" instead of the customer). Fixed to A-B-A: user says learned phrases, other speaker gives a natural response.
 
 ### What to address later (not blocking)
-- **32 cards per session is on the high side.** Not a problem for motivated sessions, but needs mini-milestones (see Roadmap #9) for users who only have 1 minute.
-- **Interest topic map is regex-only.** Works for common keywords but misses novel phrasing. AI-based mapping is a roadmap item (#2).
-- **No difficulty gating on interest reordering.** A user interested in philosophy could get TOPIK 2 sessions before finishing TOPIK 1 basics. Band-based reordering is roadmap item (#1).
+- **32 cards per session is on the high side.** Not a problem for motivated sessions, but needs session checkpoints (see Roadmap #1) for users who only have 1 minute.
+- **No difficulty gating on interest reordering.** A user interested in philosophy could get TOPIK 2 sessions before finishing TOPIK 1 basics. Band-based reordering is Roadmap #2.
+- **Interest topic map is regex-only.** Works for common keywords but misses novel phrasing. AI-based mapping is Roadmap #4.
