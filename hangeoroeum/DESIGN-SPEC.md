@@ -29,8 +29,8 @@ Hangul directly. You can already read it. Speed comes from practice, not a crutc
 ### 6. Korean-first, English as bridge
 Exercise prompts in Korean (tappable to reveal English translation). All buttons show Korean with subtle English whisper subtitles. English kept for navigation, settings, grammar notes, and explanations. Reference: King Sejong Institute approach — immersion-forward without being confusing.
 
-### 7. Translations wherever needed
-The app helps, it doesn't withhold. English meanings are generous and always available — just not shoved in your face.
+### 7. Translations, but just wherever needed
+The app helps, it doesn't withhold. English meanings are available — just not shoved in your face.
 
 ---
 
@@ -366,6 +366,8 @@ Hand-polish the anchor sessions: per-phrase `response` fields for natural dialog
 ### 6. Learning Journey / Progress Path
 
 **The problem**: Showing "Session 12/60" is overwhelming — it emphasizes how much is left, not how much you've done. And we don't have a hard cap at 60 anyway (AI generation could extend it).
+- **22 cards per session is on the high side.** Not a problem for motivated sessions, but needs session checkpoints (see Roadmap #1) for users who only have 1 minute. → **Is it resolved?Resolved.** Session checkpoints implemented (every 8 cards, persistent save persistence save  if implemented, it is great, but does it show any checkpoints in the 22 sessions, because 22 sessions is really a lot).
+
 
 **The fix — chapter-based framing**:
 - Instead of "12/60", show **"Session 12 (1/3)"** — meaning session 12, first of 3 sessions in this chapter/topic. The denominator is the number of sessions *in the current level or topic group*, not the total.
@@ -433,7 +435,7 @@ Audio cache currently dies on page reload — in-memory only. Persist to Indexed
 **Connects to**: #3 (grammar skeletons define the generation contract), #4 (interest mapping provides the topic), #2 (bands determine difficulty slotting), #6 (progress display reflects personalized plan).
 
 ### 9. Social / Share
-Phrase cards designed to be screenshot-worthy for stories. Future: dedicated share/export feature for phrase cards.
+Phrase cards designed to be screenshot-worthy for stories.  not a featureMore of a design philosophy for pretty-looking cards 
 
 ---
 
@@ -448,9 +450,8 @@ Context from first live testing session. These observations inform future priori
 - **The "see" (SA) exercises are fine.** They're spaced out between active exercises, not clustered. For the first-ever session, starting with SA is appropriate since there's nothing to warm up with.
 
 ### What was fixed
-- **Dialogue speaker assignment was backwards.** The old B-A-B pattern assigned learned phrases to the other speaker (e.g., barista saying "얼마예요?" instead of the customer). Fixed to A-B-A: user says learned phrases, other speaker gives a natural response.
+- **Dialogue speaker assignment was backwards.** The old B-A-B pattern assigned learned phrases to the other speaker (e.g., barista saying "얼마예요?" instead of the customer). Fixed to A-B-A: user says learned phrases, other speaker gives a natural response.  however, right now it is only three lines. It should at least be 5 to 7 lines.
 
-### What to address later (not blocking)
-- ~~**32 cards per session is on the high side.** Not a problem for motivated sessions, but needs session checkpoints (see Roadmap #1) for users who only have 1 minute.~~ → **Resolved.** Session checkpoints implemented (every 8 cards, persistent save).
-- ~~**No difficulty gating on interest reordering.** A user interested in philosophy could get TOPIK 2 sessions before finishing TOPIK 1 basics. Band-based reordering is Roadmap #2.~~ → **Resolved.** Band-based reordering implemented.
+### What else to address 
+- **No difficulty gating on interest reordering.** A user interested in philosophy could get TOPIK 2 sessions before finishing TOPIK 1 basics. Band-based reordering is Roadmap #2. → **Resolved.** Band-based reordering implemented.
 - **Interest topic map is regex-only.** Works for common keywords but misses novel phrasing. AI-based mapping is Roadmap #4.
