@@ -147,7 +147,7 @@ Each session: 1 scene + 1 focus phrase + 5 total phrases + meaning notes + optio
 
 Users write a freeform brain-dump in Settings about their interests, job, hobbies, goals. The app extracts keywords client-side (no API needed) using `TOPIC_KEYWORDS` maps, builds an interest score per topic, and reorders remaining sessions so higher-interest topics come first. Original session order is the tiebreaker.
 
-**How it works**: `buildInterestMap(aboutText)` → regex keyword matching → `{topic: score}` map. `getOrderedSessions(completedIds, interestMap)` → sort by interest score desc, then by session ID asc.
+**How it works**: `buildInterestMap(aboutText)` → AI mapping via Gemini (cached in localStorage) with regex fallback → `{topic: score}` map. `getOrderedSessions(completedIds, interestMap)` → sort by interest score desc, then by session ID asc. AI mapping triggers once when "About You" is saved, cached until text changes.
 
 ~~**Previous limitation — no difficulty gating**~~ → **Resolved.** Band-based reordering (Roadmap #2) now sorts within 3 difficulty bands (1-20, 21-40, 41-60) instead of a flat sort. Grammar progression preserved, interests reorder within each tier. Anchor sessions (like 카페 for 주세요/얼마예요) still TODO.
 
@@ -272,9 +272,9 @@ All v1 features are built and functional:
 ## Future Roadmap
 
 **STATUS (do not re-verify or re-implement done items):**
-- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #7 TTS Persistence (IndexedDB), #9 Reduce Session Exercise Count
-- **NEXT**: #4 AI Interest Mapping → #8 AI Personalization
-- **NOT STARTED**: #4-#6, #8
+- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #4 AI Interest Mapping, #7 TTS Persistence (IndexedDB), #9 Reduce Session Exercise Count
+- **NEXT**: #8 AI Content Personalization (the big one)
+- **NOT STARTED**: #5, #6, #8
 - **MERGED**: Old #3 (Richer Dialogue), old #5 (Richer Content for all 60 sessions), old #9 (Post-60 Generation), and old #10 (AI Personalization) are unified into #8 (AI Content Personalization). The current #5 (Richer Anchor Session Content) is a narrower task — hand-polishing anchor sessions only, not all 60.
 - **DESIGN NOTE (not a roadmap item)**: Phrase cards are designed to be screenshot-worthy for stories — this is a visual design philosophy baked into the Collection view, not a feature to build.
 

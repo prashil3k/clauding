@@ -674,14 +674,13 @@
       texting: ['text', 'texting', 'chat', 'message', 'social media', 'instagram', 'kakao', 'kakaotalk', 'online', 'meme', 'slang']
     };
 
-    function buildInterestMap(aboutText) {
+    function buildInterestMapRegex(aboutText) {
       if (!aboutText || !aboutText.trim()) return null;
       const lower = aboutText.toLowerCase();
       const scores = {};
       Object.entries(TOPIC_KEYWORDS).forEach(([topic, keywords]) => {
         let score = 0;
         keywords.forEach(kw => {
-          // Count occurrences (word boundary-ish matching)
           const regex = new RegExp('\\b' + kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'gi');
           const matches = lower.match(regex);
           if (matches) score += matches.length;
@@ -689,6 +688,78 @@
         if (score > 0) scores[topic] = score;
       });
       return Object.keys(scores).length > 0 ? scores : null;
+    }
+
+    // AI-powered interest mapping: sends About You text to Gemini,
+    // gets back topic relevance scores. Cached in localStorage.
+    async function buildInterestMapAI(aboutText) {
+      const apiKey = load('geminiKey', '');
+      if (!apiKey || !aboutText || !aboutText.trim()) return null;
+
+      const topics = Object.keys(TOPIC_KEYWORDS);
+      const prompt = `You are a Korean language learning app. The user described their interests below. Rate how relevant each topic is to them on a scale of 0-5 (0 = no relevance, 5 = strong match). Return ONLY a JSON object mapping topic names to scores, no explanation.
+
+Topics: ${topics.join(', ')}
+
+User's interests:
+${aboutText.trim()}
+
+Return format: {"topic": score, ...} — only include topics with score > 0.`;
+
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.1 }
+            })
+          }
+        );
+        if (!resp.ok) throw new Error(`API ${resp.status}`);
+        const data = await resp.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        // Extract JSON from response (handles markdown code blocks)
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON in response');
+        const scores = JSON.parse(jsonMatch[0]);
+        // Validate: only keep known topics with numeric scores > 0
+        const valid = {};
+        topics.forEach(t => {
+          if (typeof scores[t] === 'number' && scores[t] > 0) valid[t] = scores[t];
+        });
+        return Object.keys(valid).length > 0 ? valid : null;
+      } catch (e) {
+        console.warn('AI interest mapping failed, falling back to regex:', e.message);
+        return null;
+      }
+    }
+
+    // Trigger AI mapping and cache result. Called when About You is saved.
+    async function refreshInterestMap(aboutText) {
+      if (!aboutText || !aboutText.trim()) {
+        save('aiInterestMap', null);
+        save('aiInterestMapText', '');
+        return;
+      }
+      const aiMap = await buildInterestMapAI(aboutText);
+      if (aiMap) {
+        save('aiInterestMap', aiMap);
+        save('aiInterestMapText', aboutText.trim());
+      }
+    }
+
+    // Unified: use cached AI map if available and text matches, else regex fallback
+    function buildInterestMap(aboutText) {
+      if (!aboutText || !aboutText.trim()) return null;
+      const cachedText = load('aiInterestMapText', '');
+      if (cachedText === aboutText.trim()) {
+        const aiMap = load('aiInterestMap', null);
+        if (aiMap) return aiMap;
+      }
+      return buildInterestMapRegex(aboutText);
     }
 
     function getOrderedSessions(completedIds, interestMap) {
@@ -2042,9 +2113,12 @@
       }
 
       function saveAboutYou() {
-        setAboutYou(aboutInput.trim());
+        const text = aboutInput.trim();
+        setAboutYou(text);
         setSaved('about');
         setTimeout(() => setSaved(null), 2000);
+        // Trigger AI interest mapping in background (non-blocking)
+        refreshInterestMap(text);
       }
 
       async function handleDetect() {
