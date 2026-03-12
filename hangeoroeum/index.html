@@ -358,7 +358,8 @@
     /* ── Gemini TTS Constants ────────────────────────────────────── */
     const KNOWN_TTS_MODELS = [
       'gemini-2.5-flash-preview-tts',
-      'gemini-2.0-flash-lite-preview-tts',
+      'gemini-2.5-flash-lite-preview-tts',
+      'gemini-2.5-pro-preview-tts',
     ];
     const DEFAULT_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
     const TTS_VOICES = [
@@ -370,9 +371,23 @@
     ];
     const DEFAULT_VOICE = 'Kore';
     const MODEL_FALLBACKS = {
-      'gemini-2.5-flash-preview-tts': 'gemini-2.0-flash-lite-preview-tts',
-      'gemini-2.0-flash-lite-preview-tts': null,
+      'gemini-2.5-flash-preview-tts': 'gemini-2.5-flash-lite-preview-tts',
+      'gemini-2.5-flash-lite-preview-tts': 'gemini-2.5-pro-preview-tts',
+      'gemini-2.5-pro-preview-tts': 'gemini-2.5-flash-lite-preview-tts',
     };
+
+    /* ── Migrate stale TTS model names ─────────────────────────── */
+    (() => {
+      const saved = load('ttsModel', '');
+      if (saved && !KNOWN_TTS_MODELS.includes(saved)) {
+        save('ttsModel', DEFAULT_TTS_MODEL);
+      }
+      const savedModels = load('ttsModels', null);
+      if (savedModels) {
+        const cleaned = savedModels.filter(m => !m.includes('2.0-flash-lite'));
+        if (cleaned.length !== savedModels.length) save('ttsModels', cleaned.length > 0 ? cleaned : KNOWN_TTS_MODELS);
+      }
+    })();
 
     /* ── Audio cache ─────────────────────────────────────────────── */
     const audioCache = {};
@@ -401,45 +416,56 @@
       return new Blob([buf], { type: 'audio/wav' });
     }
 
-    /* ── Gemini TTS Call ─────────────────────────────────────────── */
-    async function callGeminiTTS(text, apiKey, model, voice) {
+    /* ── Gemini TTS Call (with retry) ─────────────────────────────── */
+    async function callGeminiTTS(text, apiKey, model, voice, retries = 1) {
       const cacheKey = text + '|' + voice + '|' + model;
       if (audioCache[cacheKey]) return audioCache[cacheKey];
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text }] }],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: voice }
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text }] }],
+              generationConfig: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: voice }
+                  }
+                }
               }
-            }
+            })
+          });
+
+          if (!resp.ok) {
+            const err = await resp.text().catch(() => '');
+            throw new Error(`TTS API ${resp.status}: ${err.slice(0, 200)}`);
           }
-        })
-      });
 
-      if (!resp.ok) {
-        const err = await resp.text().catch(() => '');
-        throw new Error(`TTS API ${resp.status}: ${err.slice(0, 200)}`);
+          const data = await resp.json();
+          const part = data?.candidates?.[0]?.content?.parts?.[0];
+          if (!part?.inlineData?.data) throw new Error('No audio in response');
+
+          const wavBlob = pcmToWav(part.inlineData.data);
+          const blobUrl = URL.createObjectURL(wavBlob);
+          audioCache[cacheKey] = blobUrl;
+          return blobUrl;
+        } catch (e) {
+          if (attempt < retries) {
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
+          throw e;
+        }
       }
-
-      const data = await resp.json();
-      const part = data?.candidates?.[0]?.content?.parts?.[0];
-      if (!part?.inlineData?.data) throw new Error('No audio in response');
-
-      const wavBlob = pcmToWav(part.inlineData.data);
-      const blobUrl = URL.createObjectURL(wavBlob);
-      audioCache[cacheKey] = blobUrl;
-      return blobUrl;
     }
 
     /* ── TTS with fallback ───────────────────────────────────────── */
     let currentAudio = null;
+    let lastTtsSource = 'none'; // 'gemini' | 'gemini-fallback' | 'web-speech' | 'none'
 
     function playAudioToEnd(audio) {
       return new Promise((resolve) => {
@@ -456,26 +482,29 @@
       const voice = load('ttsVoice', DEFAULT_VOICE);
 
       if (apiKey) {
+        // Try primary model (with 1 retry built into callGeminiTTS)
         try {
-          const url = await callGeminiTTS(text, apiKey, model, voice);
+          const url = await callGeminiTTS(text, apiKey, model, voice, 1);
           currentAudio = new Audio(url);
           const endPromise = playAudioToEnd(currentAudio);
           await currentAudio.play();
+          lastTtsSource = 'gemini';
           await endPromise;
           return;
         } catch (e) {
-          console.warn('Gemini TTS failed, trying fallback:', e.message);
+          console.warn('Gemini TTS failed (with retry), trying fallback model:', e.message);
           const fallback = MODEL_FALLBACKS[model];
           if (fallback) {
             try {
-              const url = await callGeminiTTS(text, apiKey, fallback, voice);
+              const url = await callGeminiTTS(text, apiKey, fallback, voice, 1);
               currentAudio = new Audio(url);
               const endPromise = playAudioToEnd(currentAudio);
               await currentAudio.play();
+              lastTtsSource = 'gemini-fallback';
               await endPromise;
               return;
             } catch (e2) {
-              console.warn('Fallback TTS also failed:', e2.message);
+              console.warn('Fallback model also failed:', e2.message);
             }
           }
         }
@@ -490,9 +519,13 @@
         const voices = window.speechSynthesis.getVoices();
         const ko = voices.find(v => v.lang.startsWith('ko'));
         if (ko) u.voice = ko;
+        lastTtsSource = 'web-speech';
         await new Promise((resolve) => {
           u.onend = resolve;
-          u.onerror = resolve;
+          u.onerror = () => {
+            lastTtsSource = 'none';
+            resolve();
+          };
           window.speechSynthesis.speak(u);
         });
       }
@@ -505,7 +538,11 @@
       const model = load('ttsModel', DEFAULT_TTS_MODEL);
       const voice = load('ttsVoice', DEFAULT_VOICE);
       session.phrases.forEach(p => {
-        callGeminiTTS(p.korean, apiKey, model, voice).catch(() => {});
+        callGeminiTTS(p.korean, apiKey, model, voice, 1).catch(() => {
+          // If primary fails during prefetch, try fallback model too
+          const fallback = MODEL_FALLBACKS[model];
+          if (fallback) callGeminiTTS(p.korean, apiKey, fallback, voice, 0).catch(() => {});
+        });
       });
     }
 
@@ -603,15 +640,28 @@
     function getOrderedSessions(completedIds, interestMap) {
       const sessions = window.SESSIONS || [];
       const remaining = sessions.filter(s => !completedIds.includes(s.id));
-      if (!interestMap || remaining.length === 0) return remaining;
+      if (remaining.length === 0) return remaining;
+      if (!interestMap) return remaining;
 
-      // Sort remaining sessions: higher interest score first, then by original order
-      return [...remaining].sort((a, b) => {
+      // Band-based reordering: reorder by interest WITHIN difficulty bands,
+      // but always complete earlier bands before moving to later ones.
+      // Bands: 1-20 (TOPIK 1 basics), 21-40 (TOPIK 1 extended), 41-60 (TOPIK 2)
+      const bands = [
+        remaining.filter(s => s.id <= 20),
+        remaining.filter(s => s.id > 20 && s.id <= 40),
+        remaining.filter(s => s.id > 40),
+      ];
+
+      const sortByInterest = (arr) => [...arr].sort((a, b) => {
         const scoreA = interestMap[a.topic] || 0;
         const scoreB = interestMap[b.topic] || 0;
-        if (scoreB !== scoreA) return scoreB - scoreA; // higher interest first
-        return a.id - b.id; // preserve original order as tiebreaker
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return a.id - b.id;
       });
+
+      // Return sessions from the first non-empty band (interest-sorted),
+      // then the next band, etc.
+      return bands.flatMap(sortByInterest);
     }
 
     // Detect loanwords (katakana-style Korean transcriptions of English words)
@@ -723,20 +773,28 @@
     /* ── SpeakerButton ────────────────────────────────────────────── */
     function SpeakerButton({ text }) {
       const [loading, setLoading] = useState(false);
+      const [usedFallback, setUsedFallback] = useState(false);
 
       async function handleClick(e) {
         e.stopPropagation();
         setLoading(true);
+        setUsedFallback(false);
         try {
           await speakKorean(text);
+          if (lastTtsSource === 'web-speech') setUsedFallback(true);
         } catch {}
         setLoading(false);
       }
 
       return (
-        <button className={'speaker-btn' + (loading ? ' loading' : '')} onClick={handleClick} aria-label="Listen">
-          <SpeakerIcon />
-        </button>
+        <span style={{ position: 'relative', display: 'inline-flex' }}>
+          <button className={'speaker-btn' + (loading ? ' loading' : '')} onClick={handleClick} aria-label="Listen">
+            <SpeakerIcon />
+          </button>
+          {usedFallback && (
+            <span style={{ position: 'absolute', top: -2, right: -2, width: 6, height: 6, borderRadius: '50%', background: 'var(--incorrect)', opacity: 0.7 }} title="Using basic TTS — add Gemini key for natural audio" />
+          )}
+        </span>
       );
     }
 
@@ -903,6 +961,31 @@
       );
     }
 
+    /* ── Fill-in-the-blank helpers ─────────────────────────────────── */
+    function makeBlankExercise(phrase) {
+      const words = phrase.korean.replace(/[.,!?]/g, '').split(/\s+/).filter(w => w.length > 0);
+      if (words.length < 2) return null;
+      // Pick a non-trivial word to blank out (skip very short particles)
+      const candidates = words.filter(w => w.length >= 2);
+      if (candidates.length === 0) return null;
+      const blankedWord = candidates[Math.floor(Math.random() * candidates.length)];
+      const blankedSentence = phrase.korean.replace(blankedWord, '______');
+      // Generate distractors from other words in the session's phrases
+      const allWords = ALL_PHRASES
+        .flatMap(p => p.korean.replace(/[.,!?]/g, '').split(/\s+/))
+        .filter(w => w.length >= 2 && w !== blankedWord);
+      const uniqueWords = [...new Set(allWords)];
+      // Prefer words of similar length
+      uniqueWords.sort((a, b) => {
+        const diffA = Math.abs(a.length - blankedWord.length);
+        const diffB = Math.abs(b.length - blankedWord.length);
+        return diffA - diffB;
+      });
+      const distractors = uniqueWords.slice(0, 12);
+      const picked = shuffle(distractors).slice(0, 3);
+      return { blankedSentence, blankedWord, distractors: picked };
+    }
+
     /* ── PhraseExercise (single phrase, single step) ──────────────── */
     function PhraseExercise({ phrase, step, onNext, sessionTopic }) {
       const [revealed, setRevealed] = useState(false);
@@ -974,8 +1057,49 @@
         );
       }
 
+      if (step === 'fillin') {
+        // Fill-in-the-blank: show Korean sentence with a word missing, pick the correct word
+        const blankData = useMemo(() => makeBlankExercise(phrase), [phrase.id]);
+        if (!blankData) {
+          // Fallback to recall if sentence too short to blank
+          const distractors = useMemo(() => getDistractors(phrase, 'korean', 3, sessionTopic), [phrase.id]);
+          const options = useMemo(() => shuffle([phrase.korean, ...distractors]), [phrase.id]);
+          const correctIndex = options.indexOf(phrase.korean);
+          return (
+            <div className="fade-up" style={{ padding: '24px 0' }}>
+              <KoreanPrompt korean="어떻게 말해요?" english="How do you say this?" />
+              <p style={{ fontSize: 18, marginBottom: 28, lineHeight: 1.5 }}>{phrase.english}</p>
+              <MultipleChoice
+                options={options}
+                correctIndex={correctIndex}
+                onAnswer={correct => onNext(correct ? 5 : 2)}
+                isKorean={true}
+                koreanText={phrase.korean}
+              />
+            </div>
+          );
+        }
+        const options = useMemo(() => shuffle([blankData.blankedWord, ...blankData.distractors]), [phrase.id]);
+        const correctIndex = options.indexOf(blankData.blankedWord);
+        return (
+          <div className="fade-up" style={{ padding: '24px 0' }}>
+            <KoreanPrompt korean="빈칸을 채우세요" english="Fill in the blank" />
+            <div style={{ marginBottom: 12 }}>
+              <p className="korean-large" style={{ lineHeight: 1.6 }}>{blankData.blankedSentence}</p>
+            </div>
+            <p className="english-sub" style={{ marginBottom: 28 }}>{phrase.english}</p>
+            <MultipleChoice
+              options={options}
+              correctIndex={correctIndex}
+              onAnswer={correct => onNext(correct ? 5 : 2)}
+              isKorean={true}
+              koreanText={phrase.korean}
+            />
+          </div>
+        );
+      }
+
       if (step === 'listen') {
-        // Listen-first: hear the audio, pick the English meaning (no Korean text shown)
         const distractors = useMemo(() => getDistractors(phrase, 'english', 3, sessionTopic), [phrase.id]);
         const options = useMemo(() => shuffle([phrase.english, ...distractors]), [phrase.id]);
         const correctIndex = options.indexOf(phrase.english);
@@ -1011,7 +1135,6 @@
       }
 
       if (step === 'context') {
-        // Context matching: show the situational context, pick which Korean phrase fits
         const distractors = useMemo(() => getDistractors(phrase, 'korean', 3, sessionTopic), [phrase.id]);
         const options = useMemo(() => shuffle([phrase.korean, ...distractors]), [phrase.id]);
         const correctIndex = options.indexOf(phrase.korean);
@@ -1039,39 +1162,64 @@
       return null;
     }
 
-    /* ── PhraseBeat (Beat 2) ──────────────────────────────────────── */
+    /* ── PhraseBeat (Beat 2) — Micro-learning loops ──────────────── */
+    /* Each phrase: see → recognize → recall/fillin (learn one, test one)
+       Focus phrase gets extra: listen + context
+       End: mixed review round with all phrases shuffled */
     function PhraseBeat({ session, onComplete, mastery, setMastery, onExit, onSettings }) {
       const phrases = session.phrases;
       const focusIdx = session.focusIndex || 0;
+      const CHECKPOINT_INTERVAL = 8;
 
       const sequence = useMemo(() => {
         const seq = [];
         const focus = phrases[focusIdx];
         const others = phrases.filter((_, i) => i !== focusIdx);
 
-        // Warm-up is now its own beat (WarmupBeat) before the scene.
-        // PhraseBeat starts with introducing new phrases.
-
-        // Phase 1: Reveal — show focus phrase + all non-focus phrases
+        // ── Micro-loop: Focus phrase first (introduce → test immediately) ──
         seq.push({ phrase: focus, step: 'see' });
-        others.forEach(p => seq.push({ phrase: p, step: 'see' }));
+        seq.push({ phrase: focus, step: 'recognize' });
+        seq.push({ phrase: focus, step: 'fillin' });
 
-        // Phase 2: Test — recognize all phrases (shuffled, focus included)
-        shuffle([...phrases]).forEach(p => seq.push({ phrase: p, step: 'recognize' }));
+        // ── Micro-loops: Other phrases, 2 at a time ──
+        // Pair them up so you learn 2, then get tested on those 2
+        for (let i = 0; i < others.length; i += 2) {
+          const chunk = others.slice(i, i + 2);
+          // See both phrases in the chunk
+          chunk.forEach(p => seq.push({ phrase: p, step: 'see' }));
+          // Immediately test both (shuffled exercises)
+          const chunkExercises = [];
+          chunk.forEach(p => {
+            chunkExercises.push({ phrase: p, step: 'recognize' });
+            chunkExercises.push({ phrase: p, step: Math.random() > 0.5 ? 'recall' : 'fillin' });
+          });
+          shuffle(chunkExercises).forEach(e => seq.push(e));
+        }
 
-        // Phase 3: Final mixed recall — all phrases, diverse exercise types
-        const mixedTypes = ['recall', 'listen', 'context'];
-        const finalPhrases = shuffle([...phrases]);
-        finalPhrases.forEach((p, i) => {
-          const step = (p.id === focus.id) ? 'recall' : mixedTypes[i % mixedTypes.length];
-          seq.push({ phrase: p, step });
+        // ── Focus phrase extra practice (harder exercises) ──
+        seq.push({ phrase: focus, step: 'listen' });
+        seq.push({ phrase: focus, step: 'context' });
+
+        // ── Final mixed review: all phrases, diverse types ──
+        const reviewTypes = ['recall', 'fillin', 'listen', 'context'];
+        const reviewPhrases = shuffle([...phrases]);
+        reviewPhrases.forEach((p, i) => {
+          seq.push({ phrase: p, step: reviewTypes[i % reviewTypes.length] });
         });
+
         return seq;
       }, [session.id]);
 
-      const [idx, setIdx] = useState(0);
-      const scoresRef = useRef({});
+      // Restore checkpoint if one exists for this session
+      const checkpoint = useMemo(() => {
+        const cp = load('sessionCheckpoint', null);
+        return (cp && cp.sessionId === session.id) ? cp : null;
+      }, []);
+
+      const [idx, setIdx] = useState(checkpoint ? checkpoint.cardIndex : 0);
+      const scoresRef = useRef(checkpoint ? checkpoint.scores : {});
       const [ttsHintDismissed, setTtsHintDismissed] = useState(false);
+      const [showSaved, setShowSaved] = useState(false);
       const hasGeminiKey = !!load('geminiKey', '');
 
       const total = sequence.length;
@@ -1085,6 +1233,7 @@
         }
 
         if (idx + 1 >= total) {
+          // Session complete — apply mastery, clear checkpoint
           const newMastery = { ...mastery };
           Object.entries(scoresRef.current).forEach(([pid, quals]) => {
             const avg = Math.round(quals.reduce((a, b) => a + b, 0) / quals.length);
@@ -1092,9 +1241,21 @@
             newMastery[pid] = sm2(avg, existing);
           });
           setMastery(newMastery);
+          save('sessionCheckpoint', null);
           onComplete();
         } else {
-          setIdx(idx + 1);
+          const nextIdx = idx + 1;
+          setIdx(nextIdx);
+          // Save checkpoint every N cards
+          if (nextIdx % CHECKPOINT_INTERVAL === 0) {
+            save('sessionCheckpoint', {
+              sessionId: session.id,
+              cardIndex: nextIdx,
+              scores: scoresRef.current,
+            });
+            setShowSaved(true);
+            setTimeout(() => setShowSaved(false), 1500);
+          }
         }
       }
 
@@ -1114,7 +1275,11 @@
             <button className="btn-ghost" onClick={onSettings} style={{ padding: '8px' }}><GearIcon /></button>
           </div>
           <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, textAlign: 'center' }}>
-            {idx + 1} / {total}
+            {showSaved ? (
+              <span style={{ color: 'var(--correct)', fontWeight: 500 }} className="fade-in">progress saved</span>
+            ) : (
+              <span>{idx + 1} / {total}</span>
+            )}
           </p>
           {!hasGeminiKey && !ttsHintDismissed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -1137,18 +1302,42 @@
     }
 
     /* ── DialogueBeat (between Phrases and Takeaway) ─────────────── */
+    // Natural response lines from the other speaker, per topic
+    const TOPIC_DIALOGUE_RESPONSES = {
+      cafe: { korean: '네, 잠시만요.', english: 'Yes, one moment.' },
+      convenience: { korean: '네, 여기 있어요.', english: 'Yes, here it is.' },
+      restaurant: { korean: '네, 알겠습니다.', english: 'Yes, understood.' },
+      transit: { korean: '네, 맞아요.', english: 'Yes, that\'s right.' },
+      shopping: { korean: '네, 그럼요.', english: 'Yes, of course.' },
+      daily: { korean: '아, 그래요?', english: 'Oh, really?' },
+      movies: { korean: '맞아요, 저도요.', english: 'Right, me too.' },
+      music: { korean: '오, 진짜요?', english: 'Oh, really?' },
+      feelings: { korean: '그렇구나.', english: 'I see.' },
+      weather: { korean: '그러게요.', english: 'I know, right.' },
+      work: { korean: '네, 확인할게요.', english: 'Yes, I\'ll check.' },
+      opinions: { korean: '그렇게 생각해요?', english: 'You think so?' },
+      kdrama: { korean: '맞아, 맞아.', english: 'Right, right.' },
+      'food-culture': { korean: '맛있죠?', english: 'It\'s good, right?' },
+      philosophy: { korean: '흥미롭네요.', english: 'That\'s interesting.' },
+      health: { korean: '맞아요, 중요해요.', english: 'Right, it\'s important.' },
+      climbing: { korean: '조심하세요.', english: 'Be careful.' },
+      travel: { korean: '네, 이쪽이에요.', english: 'Yes, this way.' },
+      books: { korean: '오, 좋은 책이에요.', english: 'Oh, that\'s a good book.' },
+      texting: { korean: 'ㅋㅋ 그러게.', english: 'Lol, right.' }
+    };
+
     function DialogueBeat({ session, onContinue, onExit, onSettings }) {
       const phrases = session.phrases;
       const lines = useMemo(() => {
-        // Pick 3 phrases that form a natural exchange (focus + 2 others)
+        // A-B-A pattern: user says learned phrases, other speaker responds naturally
         const focusIdx = session.focusIndex || 0;
         const focus = phrases[focusIdx];
         const others = phrases.filter((_, i) => i !== focusIdx);
-        // Use up to 3 lines: other, focus, other — like a real conversation
+        const response = focus.response || TOPIC_DIALOGUE_RESPONSES[session.topic] || { korean: '네.', english: 'Yes.' };
         const picked = [];
-        if (others[0]) picked.push({ speaker: 'B', phrase: others[0] });
         picked.push({ speaker: 'A', phrase: focus });
-        if (others[1]) picked.push({ speaker: 'B', phrase: others[1] });
+        picked.push({ speaker: 'B', phrase: response });
+        if (others[0]) picked.push({ speaker: 'A', phrase: others[0] });
         return picked;
       }, [session.id]);
 
@@ -1319,9 +1508,15 @@
 
     /* ── SessionView ──────────────────────────────────────────────── */
     function SessionView({ sessionId, onFinish, onMore, mastery, setMastery, onSettings, onExit }) {
-      // Start with warmup if user has mastery data, otherwise skip to scene
+      // Skip warmup/scene if resuming from a checkpoint
+      const hasCheckpoint = useMemo(() => {
+        const cp = load('sessionCheckpoint', null);
+        return cp && cp.sessionId === sessionId && cp.cardIndex > 0;
+      }, []);
       const hasMasteryData = Object.values(mastery).some(m => m.reps > 0);
-      const [beat, setBeat] = useState(hasMasteryData ? 'warmup' : 'scene');
+      const [beat, setBeat] = useState(
+        hasCheckpoint ? 'phrases' : (hasMasteryData ? 'warmup' : 'scene')
+      );
       const sessions = window.SESSIONS || [];
       const session = sessions.find(s => s.id === sessionId);
 
@@ -1613,6 +1808,111 @@
       );
     }
 
+    /* ── LessonPlanView ───────────────────────────────────────────── */
+    function LessonPlanView({ completedSessions, onBack, onStartSession }) {
+      const sessions = window.SESSIONS || [];
+
+      // Group sessions by topic
+      const grouped = useMemo(() => {
+        const map = {};
+        const order = [];
+        sessions.forEach(s => {
+          if (!map[s.topic]) {
+            map[s.topic] = { topic: s.topic, topicKorean: s.topicKorean, level: s.level, sessions: [] };
+            order.push(s.topic);
+          }
+          map[s.topic].sessions.push(s);
+        });
+        return order.map(t => map[t]);
+      }, []);
+
+      const totalCompleted = completedSessions.length;
+      const totalSessions = sessions.length;
+
+      return (
+        <div className="app-container">
+          <div className="top-bar">
+            <button className="btn-ghost" onClick={onBack} style={{ marginLeft: -12 }}>
+              <BackIcon />
+            </button>
+            <span className="top-bar-title serif" style={{ fontSize: 20 }}>수업 목록</span>
+            <div style={{ width: 44 }} />
+          </div>
+          <div className="scroll-area">
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                {totalCompleted} / {totalSessions} sessions
+              </span>
+              <div className="progress-track" style={{ flex: 1, height: 4 }}>
+                <div className="progress-fill" style={{ width: ((totalCompleted / totalSessions) * 100) + '%' }} />
+              </div>
+            </div>
+
+            {grouped.map((group, gi) => {
+              const completedInGroup = group.sessions.filter(s => completedSessions.includes(s.id)).length;
+              const isTopik2 = group.level === 'topik2';
+              const allDone = completedInGroup === group.sessions.length;
+              return (
+                <div key={group.topic} style={{ marginBottom: 20 }}>
+                  {gi === 0 && (
+                    <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 16, marginBottom: 8 }}>
+                      TOPIK 1 — Elementary
+                    </p>
+                  )}
+                  {group.sessions[0]?.id === 41 && (
+                    <div style={{ marginTop: 20, marginBottom: 12 }}>
+                      <div className="divider" />
+                      <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 12, marginBottom: 8 }}>
+                        TOPIK 2 — Intermediate
+                      </p>
+                    </div>
+                  )}
+                  <div style={{
+                    background: allDone ? 'var(--correct-bg)' : 'var(--surface)',
+                    borderRadius: 12, padding: '12px 16px',
+                    borderLeft: allDone ? '3px solid var(--correct)' : '3px solid var(--border)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div>
+                        <span className="korean" style={{ fontSize: 15, fontWeight: 500 }}>{group.topicKorean}</span>
+                        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 8 }}>{TOPIC_ENGLISH[group.topic] || group.topic}</span>
+                      </div>
+                      <span style={{ fontSize: 12, color: allDone ? 'var(--correct)' : 'var(--text-tertiary)', fontWeight: 500 }}>
+                        {completedInGroup}/{group.sessions.length}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {group.sessions.map(s => {
+                        const done = completedSessions.includes(s.id);
+                        const focusPhrase = s.phrases[s.focusIndex || 0];
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => onStartSession(s.id)}
+                            title={focusPhrase.korean + ' — ' + focusPhrase.english}
+                            style={{
+                              padding: '4px 10px', fontSize: 12, borderRadius: 6, border: 'none',
+                              background: done ? 'var(--correct)' : 'white',
+                              color: done ? 'white' : 'var(--text-secondary)',
+                              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
+                              transition: 'background 0.15s',
+                              opacity: done ? 1 : 0.8
+                            }}
+                          >
+                            {s.id}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     /* ── SettingsView ─────────────────────────────────────────────── */
     function SettingsView({ onBack }) {
       const [geminiKey, setGeminiKey] = useStorage('geminiKey', '');
@@ -1625,15 +1925,59 @@
       const [geminiInput, setGeminiInput] = useState(geminiKey);
       const [anthropicInput, setAnthropicInput] = useState(anthropicKey);
       const [aboutInput, setAboutInput] = useState(aboutYou);
-      const [saved, setSaved] = useState(null); // 'gemini' | 'anthropic' | 'about' | null
+      const [saved, setSaved] = useState(null); // 'gemini' | 'gemini-error' | 'anthropic' | 'about' | null
       const [detecting, setDetecting] = useState(false);
       const [detectMsg, setDetectMsg] = useState('');
       const [testPlaying, setTestPlaying] = useState(false);
+      const [geminiStatus, setGeminiStatus] = useState(''); // 'validating' | 'valid' | error message
 
-      function saveGemini() {
-        setGeminiKey(geminiInput.trim());
-        setSaved('gemini');
-        setTimeout(() => setSaved(null), 2000);
+      async function saveGemini() {
+        const key = geminiInput.trim();
+        if (!key) {
+          setGeminiKey('');
+          setSaved('gemini');
+          setGeminiStatus('');
+          setTimeout(() => setSaved(null), 2000);
+          return;
+        }
+        setGeminiStatus('validating');
+        // Validate by trying to list models
+        try {
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+          if (!resp.ok) {
+            const err = await resp.text().catch(() => '');
+            if (resp.status === 400 || resp.status === 403) {
+              setGeminiStatus('Invalid API key');
+              setSaved('gemini-error');
+              setTimeout(() => setSaved(null), 4000);
+              return;
+            }
+            throw new Error(`API ${resp.status}`);
+          }
+          const data = await resp.json();
+          const models = (data.models || [])
+            .map(m => m.name.replace('models/', ''))
+            .filter(n => n.includes('tts'));
+          if (models.length > 0) {
+            const known = KNOWN_TTS_MODELS.filter(m => models.includes(m));
+            const extra = models.filter(m => !KNOWN_TTS_MODELS.includes(m));
+            const allModels = [...known, ...extra];
+            setAvailableModels(allModels);
+            if (!allModels.includes(ttsModel)) setTtsModel(allModels[0]);
+            setGeminiStatus(`Key valid — ${allModels.length} TTS model${allModels.length > 1 ? 's' : ''} found`);
+          } else {
+            setGeminiStatus('Key valid — no TTS models found (check API access)');
+          }
+          setGeminiKey(key);
+          setSaved('gemini');
+          setTimeout(() => setSaved(null), 2000);
+          setTimeout(() => setGeminiStatus(''), 6000);
+        } catch (e) {
+          setGeminiStatus('Could not validate key — saved anyway');
+          setGeminiKey(key);
+          setSaved('gemini');
+          setTimeout(() => { setSaved(null); setGeminiStatus(''); }, 4000);
+        }
       }
 
       function saveAnthropic() {
@@ -1669,11 +2013,22 @@
         setTimeout(() => setDetectMsg(''), 4000);
       }
 
+      const [ttsTestResult, setTtsTestResult] = useState('');
+
       async function testVoice() {
         setTestPlaying(true);
-        try { await speakKorean('안녕하세요'); }
-        catch {}
+        setTtsTestResult('');
+        try {
+          await speakKorean('안녕하세요');
+          if (lastTtsSource === 'gemini') setTtsTestResult('Gemini TTS working');
+          else if (lastTtsSource === 'gemini-fallback') setTtsTestResult('Playing via fallback model');
+          else if (lastTtsSource === 'web-speech') setTtsTestResult('Fell back to basic TTS — check API key & model');
+          else setTtsTestResult('No audio played');
+        } catch {
+          setTtsTestResult('Audio playback failed');
+        }
         setTestPlaying(false);
+        setTimeout(() => setTtsTestResult(''), 5000);
       }
 
       const DATA_KEYS = ['completedSessions', 'mastery', 'streak', 'lastSessionDate',
@@ -1763,11 +2118,25 @@
                 <button
                   className="btn-primary"
                   onClick={saveGemini}
-                  style={{ flex: 1, padding: '12px 16px', fontSize: 14, background: saved === 'gemini' ? 'var(--correct)' : undefined }}
+                  disabled={geminiStatus === 'validating'}
+                  style={{
+                    flex: 1, padding: '12px 16px', fontSize: 14,
+                    background: saved === 'gemini' ? 'var(--correct)' : saved === 'gemini-error' ? 'var(--incorrect)' : undefined,
+                    opacity: geminiStatus === 'validating' ? 0.7 : 1
+                  }}
                 >
-                  {saved === 'gemini' ? 'Saved' : 'Save Key'}
+                  {geminiStatus === 'validating' ? 'Validating...' : saved === 'gemini' ? 'Saved' : saved === 'gemini-error' ? 'Invalid Key' : 'Save Key'}
                 </button>
               </div>
+              {geminiStatus && geminiStatus !== 'validating' && (
+                <p className="detect-status" style={{
+                  marginTop: 6,
+                  color: geminiStatus.includes('valid') || geminiStatus.includes('found')
+                    ? 'var(--correct)' : 'var(--incorrect)'
+                }}>
+                  {geminiStatus}
+                </p>
+              )}
             </div>
 
             {/* TTS Model */}
@@ -1817,6 +2186,14 @@
                   {testPlaying ? '...' : '▶ Test'}
                 </button>
               </div>
+              {ttsTestResult && (
+                <p className="detect-status" style={{
+                  marginTop: 6,
+                  color: ttsTestResult.includes('working') ? 'var(--correct)' : 'var(--incorrect)'
+                }}>
+                  {ttsTestResult}
+                </p>
+              )}
             </div>
 
             <div className="divider" style={{ margin: '8px 0 24px' }} />
@@ -1922,7 +2299,7 @@
     }
 
     /* ── HomeScreen ───────────────────────────────────────────────── */
-    function HomeScreen({ completedSessions, mastery, streak, onStartSession, onCollection, onSettings }) {
+    function HomeScreen({ completedSessions, mastery, streak, onStartSession, onCollection, onSettings, onLessonPlan }) {
       const sessions = window.SESSIONS || [];
       const totalPhrases = completedSessions.reduce((acc, sid) => {
         const s = sessions.find(x => x.id === sid);
@@ -1986,6 +2363,9 @@
                   ~2 minutes per session
                 </p>
               )}
+              <button className="btn-ghost" onClick={onLessonPlan} style={{ marginTop: 12, width: '100%', textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)' }}>
+                수업 목록 <span style={{ opacity: 0.5, fontSize: 11 }}>Lesson plan</span>
+              </button>
             </div>
 
             {recentPhrases.length > 0 && (
@@ -2150,6 +2530,9 @@
       const [lastDate, setLastDate] = useStorage('lastSessionDate', null);
       const [currentSessionId, setCurrentSessionId] = useState(() => {
         if (!_shouldAutoStart) return null;
+        // Resume in-progress session if checkpoint exists
+        const cp = load('sessionCheckpoint', null);
+        if (cp && cp.sessionId && !_savedCompleted.includes(cp.sessionId)) return cp.sessionId;
         const aboutYou = load('aboutYou', '');
         const interestMap = buildInterestMap(aboutYou);
         const ordered = getOrderedSessions(_savedCompleted, interestMap);
@@ -2216,6 +2599,15 @@
       }
 
       if (view === 'settings') return <SettingsView onBack={() => setView('home')} />;
+      if (view === 'lessonplan') {
+        return (
+          <LessonPlanView
+            completedSessions={completedSessions}
+            onBack={() => setView('home')}
+            onStartSession={replaySession}
+          />
+        );
+      }
       if (view === 'collection') {
         return (
           <CollectionView
@@ -2250,6 +2642,7 @@
           onStartSession={startSession}
           onCollection={() => setView('collection')}
           onSettings={() => setView('settings')}
+          onLessonPlan={() => setView('lessonplan')}
         />
       );
     }
