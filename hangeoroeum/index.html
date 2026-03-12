@@ -1187,11 +1187,11 @@
           const chunk = others.slice(i, i + 2);
           // See both phrases in the chunk
           chunk.forEach(p => seq.push({ phrase: p, step: 'see' }));
-          // Immediately test both (shuffled exercises)
+          // Test each phrase once (alternate exercise types across chunks)
           const chunkExercises = [];
-          chunk.forEach(p => {
-            chunkExercises.push({ phrase: p, step: 'recognize' });
-            chunkExercises.push({ phrase: p, step: Math.random() > 0.5 ? 'recall' : 'fillin' });
+          chunk.forEach((p, j) => {
+            const type = (i + j) % 2 === 0 ? 'recognize' : (Math.random() > 0.5 ? 'recall' : 'fillin');
+            chunkExercises.push({ phrase: p, step: type });
           });
           shuffle(chunkExercises).forEach(e => seq.push(e));
         }
@@ -1200,9 +1200,10 @@
         seq.push({ phrase: focus, step: 'listen' });
         seq.push({ phrase: focus, step: 'context' });
 
-        // ── Final mixed review: all phrases, diverse types ──
-        const reviewTypes = ['recall', 'fillin', 'listen', 'context'];
-        const reviewPhrases = shuffle([...phrases]);
+        // ── Final mixed review: focus + 2 random others, diverse types ──
+        const reviewTypes = ['recall', 'fillin', 'listen'];
+        const reviewOthers = shuffle([...others]).slice(0, 2);
+        const reviewPhrases = shuffle([focus, ...reviewOthers]);
         reviewPhrases.forEach((p, i) => {
           seq.push({ phrase: p, step: reviewTypes[i % reviewTypes.length] });
         });
