@@ -640,15 +640,28 @@
     function getOrderedSessions(completedIds, interestMap) {
       const sessions = window.SESSIONS || [];
       const remaining = sessions.filter(s => !completedIds.includes(s.id));
-      if (!interestMap || remaining.length === 0) return remaining;
+      if (remaining.length === 0) return remaining;
+      if (!interestMap) return remaining;
 
-      // Sort remaining sessions: higher interest score first, then by original order
-      return [...remaining].sort((a, b) => {
+      // Band-based reordering: reorder by interest WITHIN difficulty bands,
+      // but always complete earlier bands before moving to later ones.
+      // Bands: 1-20 (TOPIK 1 basics), 21-40 (TOPIK 1 extended), 41-60 (TOPIK 2)
+      const bands = [
+        remaining.filter(s => s.id <= 20),
+        remaining.filter(s => s.id > 20 && s.id <= 40),
+        remaining.filter(s => s.id > 40),
+      ];
+
+      const sortByInterest = (arr) => [...arr].sort((a, b) => {
         const scoreA = interestMap[a.topic] || 0;
         const scoreB = interestMap[b.topic] || 0;
-        if (scoreB !== scoreA) return scoreB - scoreA; // higher interest first
-        return a.id - b.id; // preserve original order as tiebreaker
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return a.id - b.id;
       });
+
+      // Return sessions from the first non-empty band (interest-sorted),
+      // then the next band, etc.
+      return bands.flatMap(sortByInterest);
     }
 
     // Detect loanwords (katakana-style Korean transcriptions of English words)
@@ -1156,6 +1169,7 @@
     function PhraseBeat({ session, onComplete, mastery, setMastery, onExit, onSettings }) {
       const phrases = session.phrases;
       const focusIdx = session.focusIndex || 0;
+      const CHECKPOINT_INTERVAL = 8;
 
       const sequence = useMemo(() => {
         const seq = [];
@@ -1196,9 +1210,16 @@
         return seq;
       }, [session.id]);
 
-      const [idx, setIdx] = useState(0);
-      const scoresRef = useRef({});
+      // Restore checkpoint if one exists for this session
+      const checkpoint = useMemo(() => {
+        const cp = load('sessionCheckpoint', null);
+        return (cp && cp.sessionId === session.id) ? cp : null;
+      }, []);
+
+      const [idx, setIdx] = useState(checkpoint ? checkpoint.cardIndex : 0);
+      const scoresRef = useRef(checkpoint ? checkpoint.scores : {});
       const [ttsHintDismissed, setTtsHintDismissed] = useState(false);
+      const [showSaved, setShowSaved] = useState(false);
       const hasGeminiKey = !!load('geminiKey', '');
 
       const total = sequence.length;
@@ -1212,6 +1233,7 @@
         }
 
         if (idx + 1 >= total) {
+          // Session complete — apply mastery, clear checkpoint
           const newMastery = { ...mastery };
           Object.entries(scoresRef.current).forEach(([pid, quals]) => {
             const avg = Math.round(quals.reduce((a, b) => a + b, 0) / quals.length);
@@ -1219,9 +1241,21 @@
             newMastery[pid] = sm2(avg, existing);
           });
           setMastery(newMastery);
+          save('sessionCheckpoint', null);
           onComplete();
         } else {
-          setIdx(idx + 1);
+          const nextIdx = idx + 1;
+          setIdx(nextIdx);
+          // Save checkpoint every N cards
+          if (nextIdx % CHECKPOINT_INTERVAL === 0) {
+            save('sessionCheckpoint', {
+              sessionId: session.id,
+              cardIndex: nextIdx,
+              scores: scoresRef.current,
+            });
+            setShowSaved(true);
+            setTimeout(() => setShowSaved(false), 1500);
+          }
         }
       }
 
@@ -1241,7 +1275,11 @@
             <button className="btn-ghost" onClick={onSettings} style={{ padding: '8px' }}><GearIcon /></button>
           </div>
           <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, textAlign: 'center' }}>
-            {idx + 1} / {total}
+            {showSaved ? (
+              <span style={{ color: 'var(--correct)', fontWeight: 500 }} className="fade-in">progress saved</span>
+            ) : (
+              <span>{idx + 1} / {total}</span>
+            )}
           </p>
           {!hasGeminiKey && !ttsHintDismissed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -1295,7 +1333,7 @@
         const focusIdx = session.focusIndex || 0;
         const focus = phrases[focusIdx];
         const others = phrases.filter((_, i) => i !== focusIdx);
-        const response = TOPIC_DIALOGUE_RESPONSES[session.topic] || { korean: '네.', english: 'Yes.' };
+        const response = focus.response || TOPIC_DIALOGUE_RESPONSES[session.topic] || { korean: '네.', english: 'Yes.' };
         const picked = [];
         picked.push({ speaker: 'A', phrase: focus });
         picked.push({ speaker: 'B', phrase: response });
@@ -1470,9 +1508,15 @@
 
     /* ── SessionView ──────────────────────────────────────────────── */
     function SessionView({ sessionId, onFinish, onMore, mastery, setMastery, onSettings, onExit }) {
-      // Start with warmup if user has mastery data, otherwise skip to scene
+      // Skip warmup/scene if resuming from a checkpoint
+      const hasCheckpoint = useMemo(() => {
+        const cp = load('sessionCheckpoint', null);
+        return cp && cp.sessionId === sessionId && cp.cardIndex > 0;
+      }, []);
       const hasMasteryData = Object.values(mastery).some(m => m.reps > 0);
-      const [beat, setBeat] = useState(hasMasteryData ? 'warmup' : 'scene');
+      const [beat, setBeat] = useState(
+        hasCheckpoint ? 'phrases' : (hasMasteryData ? 'warmup' : 'scene')
+      );
       const sessions = window.SESSIONS || [];
       const session = sessions.find(s => s.id === sessionId);
 
@@ -2486,6 +2530,9 @@
       const [lastDate, setLastDate] = useStorage('lastSessionDate', null);
       const [currentSessionId, setCurrentSessionId] = useState(() => {
         if (!_shouldAutoStart) return null;
+        // Resume in-progress session if checkpoint exists
+        const cp = load('sessionCheckpoint', null);
+        if (cp && cp.sessionId && !_savedCompleted.includes(cp.sessionId)) return cp.sessionId;
         const aboutYou = load('aboutYou', '');
         const interestMap = buildInterestMap(aboutYou);
         const ordered = getOrderedSessions(_savedCompleted, interestMap);
