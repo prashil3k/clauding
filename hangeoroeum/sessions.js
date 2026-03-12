@@ -733,3 +733,439 @@ window.SESSIONS = [
     ]
   }
 ];
+
+// ─── GRAMMAR SKELETONS & ANCHOR TAGS ──────────────────────────
+// Roadmap #3: Extracted grammar contract per session.
+// Each skeleton defines the grammar point(s), key vocab, and whether
+// the session is an anchor (topic + grammar inseparable, untouched by AI).
+// Non-anchor sessions can be re-skinned by the AI personalization system (#8).
+//
+// Skeleton spec per session:
+//   grammar:    Primary grammar pattern(s) taught
+//   keyVocab:   Words that MUST appear regardless of topic re-skinning
+//   anchor:     true = topic+grammar naturally paired, no AI re-skin
+//   notes:      Why it's anchored, or what makes the grammar transferable
+
+window.GRAMMAR_SKELETONS = {
+  // ─── CAFÉ & ORDERING (1-4) — ALL ANCHORS ─────────────────────
+  // Ordering grammar is inseparable from service/shop contexts.
+  1: {
+    grammar: ["주세요 (please give me)", "얼마예요 (how much)", "돼요 (is it okay/possible)", "-ㄹ게요 (soft promise/intent)"],
+    keyVocab: ["주세요", "얼마", "돼요"],
+    anchor: true,
+    notes: "Foundational ordering grammar — must be taught in a service context"
+  },
+  2: {
+    grammar: ["해 주세요 (please do for me)", "-게 해 주세요 (please make it...)", "맛있어요 (is delicious)", "-ㄹ게요 (I will)"],
+    keyVocab: ["해 주세요", "맛있어요"],
+    anchor: true,
+    notes: "Modification requests — needs ordering context"
+  },
+  3: {
+    grammar: ["있어요 (there is / do you have)", "뭐예요 (what is it)", "좋다 (casual observation)"],
+    keyVocab: ["있어요", "뭐예요"],
+    anchor: true,
+    notes: "Existence/availability questions — café essentials like wifi, outlets, seats"
+  },
+  4: {
+    grammar: ["추천해 주세요 (please recommend)", "-지 않은 (not... adjective form)", "하나 더 (one more)", "잘 먹겠습니다 (pre-meal ritual)"],
+    keyVocab: ["추천", "하나 더", "잘 먹겠습니다"],
+    anchor: true,
+    notes: "Menu navigation + dining ritual phrases — food context essential"
+  },
+
+  // ─── CONVENIENCE STORE (5-8) — ALL ANCHORS ───────────────────
+  // Transactional phrases tied to retail/convenience store interactions.
+  5: {
+    grammar: ["필요하세요? (do you need — polite)", "괜찮아요 (it's okay / no need)", "-어 주세요 (please do for me)"],
+    keyVocab: ["필요하세요", "괜찮아요", "주세요"],
+    anchor: true,
+    notes: "Cashier interaction grammar — needs retail context"
+  },
+  6: {
+    grammar: ["어디 있어요? (where is...)", "저기 (over there)", "맛있게 드세요 (honorific enjoy)"],
+    keyVocab: ["어디", "있어요", "드세요"],
+    anchor: true,
+    notes: "Finding items in a store — location + honorific"
+  },
+  7: {
+    grammar: ["-로 할게요 (I'll do it with/by...)", "-이랑 (and — casual connector)", "충전 (charge/top-up)"],
+    keyVocab: ["카드로", "현금으로", "할게요"],
+    anchor: true,
+    notes: "Payment method grammar — needs transactional context"
+  },
+  8: {
+    grammar: ["-어도 돼요? (is it okay to...)", "-니까 (because/since)", "조심하세요 (please be careful)"],
+    keyVocab: ["돼요", "-니까"],
+    anchor: true,
+    notes: "Permission + reason grammar — taught via asking to use things in a store"
+  },
+
+  // ─── RESTAURANT & FOOD (9-12) — ALL ANCHORS ──────────────────
+  // Food ordering, menu interaction, and dining grammar.
+  9: {
+    grammar: ["뭐가 맛있어요? (what's good)", "어떤 (what kind of)", "-지 않은 걸로 (the one that's not...)", "계산해 주세요 (bill please)", "과거 -었어요"],
+    keyVocab: ["맛있어요", "계산", "맵다"],
+    anchor: true,
+    notes: "Menu questions + bill — inseparable from restaurant"
+  },
+  10: {
+    grammar: ["추가해 주세요 (please add more)", "좀 줄여 주세요 (please reduce a bit)", "counter: 한 병 (one bottle)", "배불러요 (I'm full)"],
+    keyVocab: ["추가", "더", "한 병"],
+    anchor: true,
+    notes: "KBBQ-specific ordering — counters for bottles, more-of requests"
+  },
+  11: {
+    grammar: ["-지 않아요? (isn't it...? negative question)", "진짜 (really — casual)", "하나 더요 (one more — casual polite)"],
+    keyVocab: ["하나", "진짜", "더"],
+    anchor: true,
+    notes: "Street food ordering — casual register, counters"
+  },
+  12: {
+    grammar: ["counter: 두 명 (two people)", "주문할게요 (I'll order)", "같은 거 (same thing)", "물 좀 주세요 (softener 좀)"],
+    keyVocab: ["명", "주문", "같은"],
+    anchor: true,
+    notes: "Restaurant seating + ordering for group — counters for people"
+  },
+
+  // ─── TRANSIT (13-16) — ALL ANCHORS ────────────────────────────
+  // Direction, transfer, and location grammar requires transit context.
+  13: {
+    grammar: ["비었어요 (is empty — state result)", "갈아타다 (to transfer)", "내려야 해요 (need to get off)", "어디로 가요 (where does it go)"],
+    keyVocab: ["갈아타다", "내리다", "역"],
+    anchor: true,
+    notes: "Subway navigation — transfer/exit grammar needs transit"
+  },
+  14: {
+    grammar: ["몇 번 (which number)", "타야 돼요 (need to ride)", "내릴 때 알려 주세요 (please tell me when to get off)", "정류장 (bus stop)"],
+    keyVocab: ["타다", "내리다", "알려 주세요"],
+    anchor: true,
+    notes: "Bus grammar — route numbers, stops"
+  },
+  15: {
+    grammar: ["가 주세요 (please go to)", "세워 주세요 (please stop here)", "얼마나 걸려요 (how long does it take)", "결제 (payment)"],
+    keyVocab: ["가 주세요", "세우다", "걸리다"],
+    anchor: true,
+    notes: "Taxi grammar — destination, stopping, time/payment"
+  },
+  16: {
+    grammar: ["이 근처에 (near here)", "걸어서 (on foot / by walking)", "-하면 있어요 (if you do X, it's there)", "찾아가다 (to find one's way)"],
+    keyVocab: ["근처", "걸어서", "직진"],
+    anchor: true,
+    notes: "Asking directions — location grammar needs real-place context"
+  },
+
+  // ─── SHOPPING (17-20) — ALL ANCHORS ───────────────────────────
+  // Price, try-on, exchange/return grammar tied to shopping.
+  17: {
+    grammar: ["좀 더 싼 (a bit cheaper)", "다른 색 (other color)", "-어 봐도 돼요? (can I try...?)", "이걸로 할게요 (I'll take this)"],
+    keyVocab: ["싼", "입어 보다", "이걸로"],
+    anchor: true,
+    notes: "Try-on + selection grammar — needs retail context"
+  },
+  18: {
+    grammar: ["깎아 주세요 (please discount)", "너무 비싸요 (too expensive)", "-면 얼마예요 (how much if...)", "구경만 (just looking)", "선물이에요 (it's a gift)"],
+    keyVocab: ["깎다", "비싸다", "구경"],
+    anchor: true,
+    notes: "Haggling grammar — specific to market shopping"
+  },
+  19: {
+    grammar: ["-으러 왔어요 (came to do...)", "이름이 뭐예요 (what's your name)", "알려 주세요 (please tell me)", "확인했습니다 (confirmed — formal)"],
+    keyVocab: ["찾으러", "알려 주세요", "확인"],
+    anchor: true,
+    notes: "Package pickup — purpose grammar + verification"
+  },
+  20: {
+    grammar: ["-고 싶어요 (want to)", "가능해요? (is it possible?)", "안 맞아요 (doesn't fit)", "바꿔 주세요 (please change/exchange)"],
+    keyVocab: ["-고 싶다", "가능하다", "바꾸다"],
+    anchor: true,
+    notes: "Exchange/return grammar — needs shopping context"
+  },
+
+  // ─── DAILY ESSENTIALS (21-24) — MIXED ─────────────────────────
+  21: {
+    grammar: ["몇 시예요 (what time)", "시에 만나요 (meet at X o'clock)", "늦었어요 (I'm late — past state)", "-ㄹ까요 (shall we)"],
+    keyVocab: ["몇 시", "만나다", "늦다"],
+    anchor: true,
+    notes: "Time expressions — universal but time-telling is a fixed curriculum point"
+  },
+  22: {
+    grammar: ["여기가 어디예요 (where is this)", "이 근처에 (near here)", "-아/어 줄 수 있어요? (could you do...?)", "-네요 (mild surprise)"],
+    keyVocab: ["어디", "화장실", "사진 찍다"],
+    anchor: true,
+    notes: "Location + requests to strangers — survival grammar"
+  },
+  23: {
+    grammar: ["되는 곳 (place where X works)", "없어요 (don't have / there isn't)", "빌려줄 수 있어요? (could you lend?)", "잘 못해요 (can't do well)"],
+    keyVocab: ["없어요", "도와주세요"],
+    anchor: false,
+    notes: "Help/lack grammar — could be re-themed to any situation where you need assistance"
+  },
+  24: {
+    grammar: ["보내다 (to send)", "-면 돼요 (if you do X, it's okay)", "나눠서 (by dividing)", "제가 낼게요 (I'll pay — humble)"],
+    keyVocab: ["보내다", "내다", "나누다"],
+    anchor: true,
+    notes: "Money/payment grammar — splitting bills is culturally tied to Korean dining"
+  },
+
+  // ─── MOVIES & SHOWS (25-28) — NOT ANCHORS ────────────────────
+  // Entertainment grammar is transferable to any hobby/interest.
+  25: {
+    grammar: ["counter: 장 (flat objects — tickets)", "몇 시에 시작해요 (when does it start)", "재미있어요 (it's fun)"],
+    keyVocab: ["장", "시작하다", "재미있다"],
+    anchor: false,
+    notes: "Counters + event timing — could be concert, exhibition, any event"
+  },
+  26: {
+    grammar: ["-고 있어요 (present progressive)", "-고 싶어 (want to — casual)", "같이 -ㄹ래? (want to do together? — casual)", "-지 마! (don't — casual)"],
+    keyVocab: ["-고 있다", "-고 싶다", "-ㄹ래"],
+    anchor: false,
+    notes: "Progressive tense + casual invitations — universal grammar"
+  },
+  27: {
+    grammar: ["봤어요? (have you seen/done? — past experience)", "꼭 봐야 돼요 (must see)", "무서운 (scary — adjective)", "감동적이었어요 (it was moving — past copula)"],
+    keyVocab: ["봤어요", "봐야 되다", "감동적"],
+    anchor: false,
+    notes: "Past experience + obligation + descriptive adjectives — any recommendation context"
+  },
+  28: {
+    grammar: ["대단해요 (amazing)", "좋아해요 (like)", "어떻게 생각해요 (what do you think)", "오고 싶어요 (want to come)"],
+    keyVocab: ["좋아하다", "생각하다", "대단하다"],
+    anchor: false,
+    notes: "Opinions + preferences — transferable to any discussion"
+  },
+
+  // ─── MUSIC & CONCERTS (29-32) — NOT ANCHORS ──────────────────
+  29: {
+    grammar: ["진짜 좋다 (casual observation)", "처음 -어 봐요 (first time trying)", "너무 좋았어요 (it was so good — past)", "언제예요 (when is it)"],
+    keyVocab: ["처음", "너무", "좋다"],
+    anchor: false,
+    notes: "First-time experience + casual reactions — any new activity"
+  },
+  30: {
+    grammar: ["누가 (who — subject)", "추천 좀 해 주세요 (please recommend — with softener)", "요즘 뭐 -고 있어요 (what are you doing these days)"],
+    keyVocab: ["누가", "추천", "요즘"],
+    anchor: false,
+    notes: "Who-questions + recommendation requests — any discovery context"
+  },
+  31: {
+    grammar: ["-자! (let's — casual)", "알아요? (do you know?)", "잘하네요! (-네요 surprise/admiration)", "한 곡 더 (counter: 곡 for songs)"],
+    keyVocab: ["-자", "알다", "-네요"],
+    anchor: false,
+    notes: "Casual proposals + admiration — any group activity"
+  },
+  32: {
+    grammar: ["목소리가 좋아요 (subject+adjective)", "어떤 장르 (what kind of)", "매일 듣는 (relative clause: that I X every day)", "들어 봐요 (try doing — imperative)"],
+    keyVocab: ["어떤", "매일", "-는 (relative clause)"],
+    anchor: false,
+    notes: "Relative clauses + try-doing — transferable to any taste/preference discussion"
+  },
+
+  // ─── EXPRESSING FEELINGS (33-36) — NOT ANCHORS ────────────────
+  // Emotion grammar is universal across topics.
+  33: {
+    grammar: ["기분이 좋아요 (subject marker on abstract noun)", "너무 기뻐요 (so happy)", "드디어 (finally — adverb)", "최고의 (the best — superlative)"],
+    keyVocab: ["기분", "기쁘다", "드디어"],
+    anchor: false,
+    notes: "Positive emotions — teachable in any achievement context"
+  },
+  34: {
+    grammar: ["좀 피곤해요 (softened state)", "힘들었어요 (past state — it was hard)", "집중이 안 돼요 (X doesn't work)", "-고 싶어요 (want to)", "나을 거예요 (future: -ㄹ 거예요)"],
+    keyVocab: ["피곤하다", "힘들다", "-ㄹ 거예요"],
+    anchor: false,
+    notes: "Negative emotions + future prediction — any difficult-day context"
+  },
+  35: {
+    grammar: ["대박 (slang exclamation)", "예쁘다 (casual observation)", "몰랐어요 (didn't know — past negative)", "잊지 못할 것 같아요 (seems like I won't be able to — double negative future)"],
+    keyVocab: ["대박", "몰랐어요", "것 같다"],
+    anchor: false,
+    notes: "Surprise + beauty reactions — any awe-inspiring experience"
+  },
+  36: {
+    grammar: ["죄송합니다 (formal apology)", "실수 (mistake)", "-으세요 (honorific question)", "-지 마세요 (please don't)", "다음에 조심할게요 (next time I'll be careful)"],
+    keyVocab: ["죄송합니다", "괜찮다", "-지 마세요"],
+    anchor: false,
+    notes: "Apology + reassurance grammar — any social accident"
+  },
+
+  // ─── WEATHER & SMALL TALK (37-40) — MIXED ─────────────────────
+  37: {
+    grammar: ["날씨 좋다 (casual topic-comment)", "올 것 같아요 (seems like it will — prediction)", "가져왔어요? (did you bring?)", "춥다/덥다 (temperature adjectives)", "몇 도 (how many degrees)"],
+    keyVocab: ["날씨", "비", "춥다"],
+    anchor: true,
+    notes: "Weather vocabulary is inseparable from weather context"
+  },
+  38: {
+    grammar: ["주말에 뭐 해요 (time+activity question)", "계획 없어요 (no plans)", "-ㄹ 거예요 (future intention)", "같이 -ㄹ래요? (want to do together — polite)"],
+    keyVocab: ["주말", "계획", "-ㄹ 거예요"],
+    anchor: false,
+    notes: "Weekend plans grammar — transferable to any social scheduling"
+  },
+  39: {
+    grammar: ["바빠요? (are you busy)", "맛있는 거 (delicious thing — adj+noun)", "건강하세요 (honorific well-wish)", "다음에 또 봐요 (see you again)"],
+    keyVocab: ["바쁘다", "건강하다", "또"],
+    anchor: false,
+    notes: "Neighbor small talk — transferable to any casual acquaintance interaction"
+  },
+  40: {
+    grammar: ["처음 뵙겠습니다 (formal first meeting)", "온 지 얼마나 됐어요 (how long since...)", "-시네요 (honorific observation)", "부족하다 (to be lacking — humility)", "교환할까요 (shall we exchange)"],
+    keyVocab: ["처음 뵙겠습니다", "부족하다"],
+    anchor: true,
+    notes: "Formal introductions + humble speech — culturally specific to Korean first meetings"
+  },
+
+  // ─── TOPIK 2: WORK & MEETINGS (41-43) — NOT ANCHORS ──────────
+  // Formal grammar (-시-, 드리다) is transferable to any formal setting.
+  41: {
+    grammar: ["잘 부탁드립니다 (humble request ritual)", "바뀌었어요 (changed — intransitive past)", "확인해 주세요 (please check)", "언제까지 해야 돼요 (deadline question)", "수고하셨습니다 (end-of-work ritual)"],
+    keyVocab: ["부탁드리다", "수고하셨습니다", "확인하다"],
+    anchor: false,
+    notes: "Workplace rituals — could be taught in any formal/collaborative setting"
+  },
+  42: {
+    grammar: ["-해도 될까요? (would it be okay if I...)", "좀 더 자세히 (in more detail — adverb stacking)", "같은 생각이에요 (same opinion)", "있으시면 말씀해 주세요 (honorific conditional)"],
+    keyVocab: ["-해도 될까요", "자세히", "말씀하다"],
+    anchor: false,
+    notes: "Meeting etiquette grammar — any formal group discussion"
+  },
+  43: {
+    grammar: ["확인하셨어요? (honorific past question)", "보내 드릴게요 (humble future: I'll send for you)", "부탁드립니다 (formal request)", "조율 (coordination)"],
+    keyVocab: ["드리다", "-셨어요", "부탁드립니다"],
+    anchor: false,
+    notes: "Humble/honorific email grammar — any professional communication"
+  },
+
+  // ─── OPINIONS & DISCUSSIONS (44-46) — NOT ANCHORS ─────────────
+  44: {
+    grammar: ["다르게 생각해요 (think differently)", "일리가 있네요 (you have a point)", "그럴 수도 있어요 (that could be — possibility)", "왜 그렇게 (why like that)"],
+    keyVocab: ["다르게", "일리", "-ㄹ 수도 있다"],
+    anchor: false,
+    notes: "Disagreement/concession grammar — any debate context"
+  },
+  45: {
+    grammar: ["솔직히 말하면 (to be honest — conditional)", "-지 마 (don't — casual prohibition)", "결정해야 해 (have to decide — casual obligation)", "천천히 -어 봐 (try slowly)", "뭘 하든 (whatever you do — concessive)"],
+    keyVocab: ["솔직히", "결정하다", "응원하다"],
+    anchor: false,
+    notes: "Honest advice grammar — any deep conversation"
+  },
+  46: {
+    grammar: ["관점에 따라 (depending on perspective)", "핵심은 이거예요 (the key point is)", "구체적인 예 (specific example)", "동의해요 (I agree)"],
+    keyVocab: ["관점", "핵심", "구체적"],
+    anchor: false,
+    notes: "Argument structure grammar — any discussion context"
+  },
+
+  // ─── K-DRAMA SITUATIONS (47-49) — NOT ANCHORS ────────────────
+  // Emotional/casual speech patterns transferable to any relationship context.
+  47: {
+    grammar: ["뜻이 아니었어 (that wasn't my meaning — past negative)", "오해하지 마 (don't misunderstand)", "내 말 좀 들어 (listen to me — casual imperative)", "잘못했어 (I was wrong)", "다시 시작하자 (let's start again)"],
+    keyVocab: ["뜻", "오해하다", "잘못하다"],
+    anchor: false,
+    notes: "Misunderstanding resolution — any interpersonal conflict"
+  },
+  48: {
+    grammar: ["보고 싶었어 (I missed you — past desire)", "-밖에 없어 (there's nothing/no one but)", "진심이야 (it's sincere)", "곁에 있어 줘 (stay by my side — request)", "-어서 미안해 (sorry because...)"],
+    keyVocab: ["보고 싶다", "진심", "곁에"],
+    anchor: false,
+    notes: "Emotional expression + confession grammar — any close relationship"
+  },
+  49: {
+    grammar: ["거짓말하지 마 (don't lie)", "왜 말 안 했어 (why didn't you say — past negative)", "이제 어쩌려고 (what are you going to do now)", "나한테 이러면 안 돼 (you can't do this to me — conditional prohibition)"],
+    keyVocab: ["거짓말", "이제", "안 되다"],
+    anchor: false,
+    notes: "Confrontation grammar — any conflict situation"
+  },
+
+  // ─── DEEPER FOOD CULTURE (50-52) — NOT ANCHORS ────────────────
+  // Cooking/drinking grammar is somewhat tied to food but the patterns transfer.
+  50: {
+    grammar: ["직접 만든 거예요? (did you make this yourself — relative clause)", "잘하시네요 (you do well — honorific surprise)", "-어도 돼요? (is it okay to)", "어떻게 해요 (how do I do it)"],
+    keyVocab: ["직접", "만들다", "넣다"],
+    anchor: false,
+    notes: "Making/creating grammar — could be crafts, art, any hands-on activity"
+  },
+  51: {
+    grammar: ["앉아도 돼요? (is it okay to sit)", "-이랑 (and)", "건배 (cheers — ritual)", "한 잔 더 할까요 (shall we have one more — counter + suggestion)"],
+    keyVocab: ["앉다", "건배", "한 잔"],
+    anchor: false,
+    notes: "Drinking/social grammar — transferable to any social gathering"
+  },
+  52: {
+    grammar: ["잘 먹겠습니다/잘 먹었습니다 (meal rituals)", "손맛 (hand-taste — idiomatic)", "레시피 알려 주세요 (please share the recipe)", "잘 먹었습니다 (post-meal ritual)"],
+    keyVocab: ["잘 먹겠습니다", "잘 먹었습니다"],
+    anchor: true,
+    notes: "Korean meal rituals — culturally inseparable from food context"
+  },
+
+  // ─── PHILOSOPHY & THOUGHTS (53-54) — NOT ANCHORS ──────────────
+  53: {
+    grammar: ["중요한 건 (the important thing is — nominalizer)", "이 순간 (this moment)", "-해도 괜찮아 (it's okay even if)", "변할 수 있어 (can change — potential)"],
+    keyVocab: ["중요하다", "순간", "변하다"],
+    anchor: false,
+    notes: "Abstract thought grammar — any reflective context"
+  },
+  54: {
+    grammar: ["관점의 차이 (difference of perspective — possessive)", "완벽할 필요 없어 (no need to be perfect)", "과정이 더 중요해 (the process is more important)", "감사한 마음이 생겨 (a grateful feeling arises)"],
+    keyVocab: ["관점", "완벽하다", "과정"],
+    anchor: false,
+    notes: "Life philosophy grammar — any meaningful conversation"
+  },
+
+  // ─── HEALTH & WELLBEING (55-56) — MIXED ───────────────────────
+  55: {
+    grammar: ["아파요 (it hurts — body part + 아프다)", "몇 번 먹어요 (how many times — frequency)", "식후에 드세요 (after meals — time expression + honorific)", "알레르기 있어요 (do you have allergies)"],
+    keyVocab: ["아프다", "진통제", "식후"],
+    anchor: true,
+    notes: "Pharmacy/medical grammar — body+symptom vocabulary is inseparable from health"
+  },
+  56: {
+    grammar: ["요즘 좀 안 좋아요 (lately not good — hedged negative)", "해야 돼 (need to do — casual obligation)", "충분히 자고 있어요? (are you sleeping enough — progressive question)", "무리하지 마 (don't overdo it)"],
+    keyVocab: ["안 좋다", "충분히", "무리하다"],
+    anchor: false,
+    notes: "Self-care advice grammar — any context where someone needs rest"
+  },
+
+  // ─── ROCK CLIMBING (57) — NOT ANCHOR ──────────────────────────
+  57: {
+    grammar: ["어때요? (how is it?)", "미끄럽다 (slippery — descriptive adjective)", "완등 (complete ascent — compound noun)", "힘이 없어요 (no strength — possession negative)", "한 번 더 해 볼까요 (shall we try one more time)"],
+    keyVocab: ["어때요", "힘이 없다", "해 볼까요"],
+    anchor: false,
+    notes: "How-is-it + physical state grammar — any physical activity"
+  },
+
+  // ─── TRAVEL & DIRECTIONS (58) — ANCHOR ────────────────────────
+  58: {
+    grammar: ["예약했어요 (I have a reservation — past action as current state)", "맡겨도 돼요? (can I leave/entrust?)", "추천해 주세요 (please recommend)", "잘 쉬었습니다 (farewell ritual for accommodations)"],
+    keyVocab: ["예약", "체크인", "짐 맡기다"],
+    anchor: true,
+    notes: "Accommodation grammar — check-in/out needs travel context"
+  },
+
+  // ─── READING & BOOKS (59) — NOT ANCHOR ────────────────────────
+  59: {
+    grammar: ["요즘 뭐 읽어요 (these days + activity question)", "좋아해요 (like — object preference)", "인기 있는 (popular — adjective from noun)", "해줄 수 있어요? (can you do for me?)"],
+    keyVocab: ["요즘", "좋아하다", "인기"],
+    anchor: false,
+    notes: "Current-interest grammar — any recommendation/taste discussion"
+  },
+
+  // ─── TEXTING & CASUAL CHAT (60) — ANCHOR ──────────────────────
+  60: {
+    grammar: ["ㅋㅋㅋ (text laughter convention)", "ㅇㅇ (text abbreviation for agreement)", "가는 중 (in the middle of — progressive)", "반말 text register"],
+    keyVocab: ["ㅋㅋㅋ", "ㅇㅇ", "가는 중"],
+    anchor: true,
+    notes: "Korean text conventions — inseparable from texting/chat context"
+  }
+};
+
+// ─── SKELETON SUMMARY ─────────────────────────────────────────
+// Total sessions: 60
+// Anchor sessions: 28 (47%) — topic+grammar inseparable
+//   Café 1-4, Convenience 5-8, Restaurant 9-12, Transit 13-16,
+//   Shopping 17-20, Daily 21-22 & 24, Weather 37, Introductions 40,
+//   Meal rituals 52, Health/pharmacy 55, Travel 58, Texting 60
+// Non-anchor sessions: 32 (53%) — grammar transferable, AI can re-skin
+//   Daily 23, Movies 25-28, Music 29-32, Feelings 33-36,
+//   Small talk 38-39, Work 41-43, Opinions 44-46, K-drama 47-49,
+//   Food culture 50-51, Philosophy 53-54, Wellbeing 56, Climbing 57,
+//   Books 59
