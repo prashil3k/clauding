@@ -29,7 +29,7 @@ Hangul directly. You can already read it. Speed comes from practice, not a crutc
 ### 6. Korean-first, English as bridge
 Exercise prompts in Korean (tappable to reveal English translation). All buttons show Korean with subtle English whisper subtitles. English kept for navigation, settings, grammar notes, and explanations. Reference: King Sejong Institute approach — immersion-forward without being confusing.
 
-### 7. Translations, but just wherever needed
+### 7. Translations wherever needed
 The app helps, it doesn't withhold. English meanings are available — just not shoved in your face.
 
 ---
@@ -147,7 +147,7 @@ Each session: 1 scene + 1 focus phrase + 5 total phrases + meaning notes + optio
 
 Users write a freeform brain-dump in Settings about their interests, job, hobbies, goals. The app extracts keywords client-side (no API needed) using `TOPIC_KEYWORDS` maps, builds an interest score per topic, and reorders remaining sessions so higher-interest topics come first. Original session order is the tiebreaker.
 
-**How it works**: `buildInterestMap(aboutText)` → regex keyword matching → `{topic: score}` map. `getOrderedSessions(completedIds, interestMap)` → sort by interest score desc, then by session ID asc.
+**How it works**: `buildInterestMap(aboutText)` → AI mapping via Gemini (cached in localStorage) with regex fallback → `{topic: score}` map. `getOrderedSessions(completedIds, interestMap)` → sort by interest score desc, then by session ID asc. AI mapping triggers once when "About You" is saved, cached until text changes.
 
 ~~**Previous limitation — no difficulty gating**~~ → **Resolved.** Band-based reordering (Roadmap #2) now sorts within 3 difficulty bands (1-20, 21-40, 41-60) instead of a flat sort. Grammar progression preserved, interests reorder within each tier. Anchor sessions (like 카페 for 주세요/얼마예요) still TODO.
 
@@ -224,14 +224,14 @@ Two-tab view: **표현/Phrases** (phrase library) and **수업/Sessions** (sessi
 ### Components & Flow
 - 16 React components: 5 beat components, 5 screen components, exercise components, icons, welcome modal
 - Screens: HomeScreen, SessionView, CollectionView (phrases + sessions tabs), LessonPlanView, SettingsView
-- PhraseBeat exercise sequence: focus phrase (see→recognize→fillin) → other phrases in pairs (see 2→test 2) → focus extras (listen+context) → mixed review (all phrases × 4 types)
+- PhraseBeat exercise sequence: focus phrase (see→recognize→fillin) → other phrases in pairs (see 2→test 1 each) → focus extras (listen+context) → mixed review (focus + 2 random others × 1 type each). ~16 exercises per session.
 - Auto-start: returning users skip HomeScreen, go straight to next session
 
 ### TTS (Gemini)
 - Gemini TTS API for natural Korean audio (PCM → WAV conversion)
 - Voices: Kore (default), Aoede, Charon, Puck, Fenrir
 - Prefetch: all 5 phrases pre-fetched when session starts (background, non-blocking)
-- In-memory audio cache per page load
+- Two-tier audio cache: in-memory (instant) + IndexedDB (persists across reloads)
 - Fallback chain: Gemini → fallback model → Web Speech API
 - `playAudioToEnd()` Promise wrapper enables sequential playback chaining
 
@@ -272,14 +272,15 @@ All v1 features are built and functional:
 ## Future Roadmap
 
 **STATUS (do not re-verify or re-implement done items):**
-- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering
-- **NEXT**: #3 Grammar Skeletons & Anchor Sessions (foundational — enables all AI work)
-- **NOT STARTED**: #4-#8
+- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #4 AI Interest Mapping, #7 TTS Persistence (IndexedDB), #9 Reduce Session Exercise Count
+- **NEXT**: #8 AI Content Personalization (the big one)
+- **NOT STARTED**: #5, #6, #8
 - **MERGED**: Old #3 (Richer Dialogue), old #5 (Richer Content for all 60 sessions), old #9 (Post-60 Generation), and old #10 (AI Personalization) are unified into #8 (AI Content Personalization). The current #5 (Richer Anchor Session Content) is a narrower task — hand-polishing anchor sessions only, not all 60.
+- **DESIGN NOTE (not a roadmap item)**: Phrase cards are designed to be screenshot-worthy for stories — this is a visual design philosophy baked into the Collection view, not a feature to build.
 
 ### Implementation Order & Dependencies
 
-**Recommended build order**: 3 → 7 (parallel) → 4 → 8 → 6 → 5
+**Recommended build order**: 3 → 7, 9 (parallel) → 4 → 8 → 6 → 5
 
 **Dependency graph**:
 - **#3 (Grammar Skeletons) blocks #8 (AI Personalization).** The AI needs to know the grammar points, key vocab, and difficulty constraints per session before it can generate anything. Skeletons ARE the prompt guardrails.
@@ -287,11 +288,12 @@ All v1 features are built and functional:
 - **#4 (AI Interest Mapping) blocks #8.** The AI needs to know the user's interests before it can re-skin sessions.
 - **#4 partially blocks #6.** The progress UI needs to know the session plan. If AI reorders sessions, the UI must handle that. But a v1 can be built without AI and upgraded later.
 - **#7 is fully independent.** No dependencies. Can be done anytime, in parallel with anything.
+- **#9 is fully independent.** Exercise count reduction. No dependencies. Can be done in parallel with #3 and #7.
 - **#5 is fully independent.** Content enrichment for anchor sessions. No code dependencies.
 
 **Why this order**:
 1. **#3 first** — foundational data extraction, no code risk, defines the entire AI generation contract
-2. **#7 in parallel** — fully independent, improves offline experience, zero risk to anything
+2. **#7 and #9 in parallel** — both fully independent. #7 improves offline experience, #9 tightens session pacing. Zero risk to anything.
 3. **#4 next** — replace regex interest mapping with LLM call, small contained change
 4. **#8 next** — the unified AI system. #3 provides guardrails, #4 provides interests, now build the generation prompt and pipeline. Includes dialogue responses, scene generation, and post-60 generation as outputs of one system.
 5. **#6 after #8** — by now session structure is known (with or without AI), so the UI reflects reality
@@ -318,9 +320,7 @@ This insight connects #2 (band-based reordering), #3 (grammar skeletons), #4 (AI
 
 **Still TODO — anchor sessions**: Sessions where the grammar+topic pairing is essential (e.g., 카페 for 주세요/얼마예요/있어요) should stay pinned regardless of interests. Not yet implemented — currently all sessions within a band are reorderable.
 
-**Why bands matter for the broader system**: Difficulty bands are the enabling layer for #4 (AI interest mapping) and #8 (AI content personalization). If a user likes rock climbing and we have grammar points from different grammar levels for that topic, bands ensure climbing sessions aren't all stuck at session 50 — there would be options at earlier grammar points too. The band system makes topics *available* across difficulty levels without breaking the grammar progression.
-
-**Connects to**: #4 (AI interest mapping feeds the reordering), #6 (progress display is per-band), #8 (personalized sessions need bands to slot content correctly).
+**Connects to**: #4 (AI interest mapping feeds the reordering), #6 (progress display is per-band), #8 (personalized sessions need bands to slot content correctly). See Key Architectural Insight for how bands enable the broader system.
 
 ### 3. Grammar Skeletons & Anchor Sessions
 
@@ -339,7 +339,7 @@ This insight connects #2 (band-based reordering), #3 (grammar skeletons), #4 (AI
 - 길찾기 + location grammar (어디예요, 어떻게 가요) — direction grammar needs a real place
 - These are hand-built, hand-polished, and untouched by AI. They ship as-is.
 
-**Anchor cap**: Anchors should be identified by genuine need, not by quota. That said, if anchors exceed ~50% of sessions, the personalization effort becomes disproportionate to the payoff — engineering a full AI pipeline for only 30% of sessions isn't worth it. The sweet spot is likely 40-50% anchored, 50-60% personalizable.
+**Anchor cap**: Anchors should be identified by genuine need, not by quota. Sweet spot: 40-50% anchored, 50-60% personalizable. If anchors exceed ~50%, the AI pipeline effort becomes disproportionate to the payoff.
 
 **Why this is foundational**: The grammar skeleton IS the prompt contract for AI generation. Without it, the AI has no guardrails. With it, the AI's job is narrow and well-defined: "fill this skeleton with content themed around [user interest], using only [TOPIK N] vocabulary." This is exactly the kind of constrained generation LLMs are reliable at.
 
@@ -366,8 +366,6 @@ Hand-polish the anchor sessions: per-phrase `response` fields for natural dialog
 ### 6. Learning Journey / Progress Path
 
 **The problem**: Showing "Session 12/60" is overwhelming — it emphasizes how much is left, not how much you've done. And we don't have a hard cap at 60 anyway (AI generation could extend it).
-- **22 cards per session is on the high side.** Not a problem for motivated sessions, but needs session checkpoints (see Roadmap #1) for users who only have 1 minute. → **Is it resolved?Resolved.** Session checkpoints implemented (every 8 cards, persistent save persistence save  if implemented, it is great, but does it show any checkpoints in the 22 sessions, because 22 sessions is really a lot).
-
 
 **The fix — chapter-based framing**:
 - Instead of "12/60", show **"Session 12 (1/3)"** — meaning session 12, first of 3 sessions in this chapter/topic. The denominator is the number of sessions *in the current level or topic group*, not the total.
@@ -412,8 +410,6 @@ Audio cache currently dies on page reload — in-memory only. Persist to Indexed
 
 **Batch generation**: Generate 3-5 sessions per API call, not all at once. Smaller batches mean tighter prompts, better quality, and easier debugging. The prompt can include the previous batch's output as context for consistency.
 
-**Anchor session scope**: Anchors are identified by genuine need (topic + grammar inseparable), not by quota. If anchors exceed ~50% of sessions, the personalization effort becomes disproportionate — engineering a full AI pipeline for only 30% of sessions isn't worth it. Sweet spot: 40-50% anchored, 50-60% personalizable. Even at 50% personalized, the experience is meaningfully different per user.
-
 **What the AI does NOT do**:
 - Touch anchor sessions. Ever.
 - Override TOPIK level constraints. A band 1 session stays band 1.
@@ -430,12 +426,19 @@ Audio cache currently dies on page reload — in-memory only. Persist to Indexed
 - **Time**: 10-20 seconds with batch parallelism. Reasonable for a one-time "Generate My Plan" action.
 - Korean learning phrases are extremely well-represented in all major model training data. The AI isn't inventing Korean — it's recombining known phrases into new topical contexts within strict guardrails.
 
-**Feasibility**: High. This is constrained generation — the AI fills a well-defined template, not open-ended content creation. Korean learning phrases are extremely well-represented in LLM training data. The narrow scope (grammar point + TOPIK level + user interest → 5 phrases + scene + dialogue) is exactly where LLMs are reliable. Main risks: (1) skeleton quality from #3 determines output quality — garbage in, garbage out; (2) some interest + grammar combos will be awkward fits — the quality gate handles this by falling back to defaults rather than forcing it.
+**Feasibility**: High. This is constrained generation — the AI fills a well-defined template, not open-ended content creation. The narrow scope (grammar point + TOPIK level + user interest → 5 phrases + scene + dialogue) is exactly where LLMs are reliable. Main risks: (1) skeleton quality from #3 determines output quality — garbage in, garbage out; (2) some interest + grammar combos will be awkward fits — the quality gate handles this by falling back to defaults rather than forcing it.
 
 **Connects to**: #3 (grammar skeletons define the generation contract), #4 (interest mapping provides the topic), #2 (bands determine difficulty slotting), #6 (progress display reflects personalized plan).
 
-### 9. Social / Share
-Phrase cards designed to be screenshot-worthy for stories.  not a featureMore of a design philosophy for pretty-looking cards 
+### 9. Reduce Session Exercise Count
+
+**The problem**: Sessions currently generate ~17-22 exercises. Even with checkpoints every 8 cards, 22 is a lot — it pushes past the "2-5 minute sandwich" feel, especially for sessions with 5 phrases where the mixed review phase multiplies.
+
+**The fix**: Trim the exercise generation in PhraseBeat. The mixed review phase (all phrases × 4 exercise types) is where the count balloons. Options: reduce the mixed review to 2-3 types per phrase instead of 4, or cap total exercises per session at ~14-16. The focus phrase should still get full coverage (see → recognize → fill-in + listen + context), but supporting phrases can get fewer reps in the mixed phase without hurting retention — SM-2 handles long-term spacing anyway.
+
+**Target**: ~14-16 exercises per session. Still enough variety to feel like a complete session, short enough to finish comfortably in 3-4 minutes.
+
+**Fully independent.** No dependencies on any other roadmap item. Can be done in parallel with #3 and #7.
 
 ---
 
@@ -446,12 +449,13 @@ Context from first live testing session. These observations inform future priori
 ### What works well
 - **Session exercise flow is solid.** 3 exercises on the focus phrase → paired introduction of new phrases → mixed review. The chunked interleaving is effective and doesn't feel repetitive in practice.
 - **Warmup beat is already active.** Returning sessions start with recognize/recall questions (not passive "see" cards), matching the ADHD-first principle.
-- **Exercise variety within a session is good.** ~17-22 exercises across 6 types (see, recognize, recall, fillin, listen, context) with smart distractors keeps it engaging.
+- **Exercise variety within a session is good.** 6 types (see, recognize, recall, fillin, listen, context) with smart distractors keeps it engaging. However, ~17-22 exercises per session is too many — needs trimming (see Roadmap #9).
 - **The "see" (SA) exercises are fine.** They're spaced out between active exercises, not clustered. For the first-ever session, starting with SA is appropriate since there's nothing to warm up with.
 
 ### What was fixed
-- **Dialogue speaker assignment was backwards.** The old B-A-B pattern assigned learned phrases to the other speaker (e.g., barista saying "얼마예요?" instead of the customer). Fixed to A-B-A: user says learned phrases, other speaker gives a natural response.  however, right now it is only three lines. It should at least be 5 to 7 lines.
+- **Dialogue speaker assignment was backwards.** The old B-A-B pattern assigned learned phrases to the other speaker (e.g., barista saying "얼마예요?" instead of the customer). Fixed to A-B-A: user says learned phrases, other speaker gives a natural response.
 
-### What else to address 
-- **No difficulty gating on interest reordering.** A user interested in philosophy could get TOPIK 2 sessions before finishing TOPIK 1 basics. Band-based reordering is Roadmap #2. → **Resolved.** Band-based reordering implemented.
+### What to address later (not blocking)
+- **Dialogue is only 3 lines.** Should be at least 5-7 lines for a more natural conversational flow. The A-B-A pattern works but feels too short.
+- ~~**No difficulty gating on interest reordering.** A user interested in philosophy could get TOPIK 2 sessions before finishing TOPIK 1 basics. Band-based reordering is Roadmap #2.~~ → **Resolved.** Band-based reordering implemented.
 - **Interest topic map is regex-only.** Works for common keywords but misses novel phrasing. AI-based mapping is Roadmap #4.
