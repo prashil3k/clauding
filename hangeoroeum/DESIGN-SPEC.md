@@ -231,7 +231,7 @@ Two-tab view: **표현/Phrases** (phrase library) and **수업/Sessions** (sessi
 - Gemini TTS API for natural Korean audio (PCM → WAV conversion)
 - Voices: Kore (default), Aoede, Charon, Puck, Fenrir
 - Prefetch: all 5 phrases pre-fetched when session starts (background, non-blocking)
-- In-memory audio cache per page load
+- Two-tier audio cache: in-memory (instant) + IndexedDB (persists across reloads)
 - Fallback chain: Gemini → fallback model → Web Speech API
 - `playAudioToEnd()` Promise wrapper enables sequential playback chaining
 
@@ -272,9 +272,9 @@ All v1 features are built and functional:
 ## Future Roadmap
 
 **STATUS (do not re-verify or re-implement done items):**
-- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #9 Reduce Session Exercise Count
-- **NEXT**: #7 TTS Persistence (independent) → #4 AI Interest Mapping → #8 AI Personalization
-- **NOT STARTED**: #4-#8
+- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #7 TTS Persistence (IndexedDB), #9 Reduce Session Exercise Count
+- **NEXT**: #4 AI Interest Mapping → #8 AI Personalization
+- **NOT STARTED**: #4-#6, #8
 - **MERGED**: Old #3 (Richer Dialogue), old #5 (Richer Content for all 60 sessions), old #9 (Post-60 Generation), and old #10 (AI Personalization) are unified into #8 (AI Content Personalization). The current #5 (Richer Anchor Session Content) is a narrower task — hand-polishing anchor sessions only, not all 60.
 - **DESIGN NOTE (not a roadmap item)**: Phrase cards are designed to be screenshot-worthy for stories — this is a visual design philosophy baked into the Collection view, not a feature to build.
 
