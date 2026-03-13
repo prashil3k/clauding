@@ -272,9 +272,8 @@ All v1 features are built and functional:
 ## Future Roadmap
 
 **STATUS (do not re-verify or re-implement done items):**
-- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #4 AI Interest Mapping, #7 TTS Persistence (IndexedDB), #8 AI Content Personalization, #9 Reduce Session Exercise Count
-- **NEXT**: #5 Richer Anchor Content, #6 Progress Display
-- **NOT STARTED**: #5, #6
+- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #4 AI Interest Mapping, #5 Richer Anchor Content, #6 Progress Display, #7 TTS Persistence (IndexedDB), #8 AI Content Personalization, #9 Reduce Session Exercise Count
+- All roadmap items complete.
 - **MERGED**: Old #3 (Richer Dialogue), old #5 (Richer Content for all 60 sessions), old #9 (Post-60 Generation), and old #10 (AI Personalization) are unified into #8 (AI Content Personalization). The current #5 (Richer Anchor Session Content) is a narrower task — hand-polishing anchor sessions only, not all 60.
 - **DESIGN NOTE (not a roadmap item)**: Phrase cards are designed to be screenshot-worthy for stories — this is a visual design philosophy baked into the Collection view, not a feature to build.
 
@@ -358,12 +357,14 @@ This insight connects #2 (band-based reordering), #3 (grammar skeletons), #4 (AI
 
 **Connects to**: #2 (provides the interest scores that band-based reordering uses), #6 (ordering affects what shows in progress view), #8 (AI personalization needs accurate interest mapping as its first step).
 
-### 5. Richer Anchor Session Content
+### 5. Richer Anchor Session Content — IMPLEMENTED
 Hand-polish the anchor sessions: per-phrase `response` fields for natural dialogue (replacing generic `TOPIC_DIALOGUE_RESPONSES`), grammar examples in context, vocab reinforcement from multiple angles. The phrase is still the atom, but grammar + vocab repetition builds fluency. For non-anchor sessions, this richness comes from AI generation (#8) — so this task only covers the hand-built anchors.
 
-**Scope**: Medium — content authoring for anchor sessions only (~25-30 sessions), not all 60. The `DialogueBeat` component already reads `phrase.response` with fallback to `TOPIC_DIALOGUE_RESPONSES`, so no code change needed.
+**Implementation**: Added `response: { korean, english }` to the focus phrase (index 0) of all 29 anchor sessions. Each response is a natural reply from the other speaker (barista, cashier, server, driver, friend, pharmacist, etc.) that contextually follows the learner's phrase. DialogueBeat already reads `phrase.response` with fallback to `TOPIC_DIALOGUE_RESPONSES` — no code change needed.
 
-### 6. Learning Journey / Progress Path
+**Scope**: Content authoring only — 29 anchor sessions, focus phrases only.
+
+### 6. Learning Journey / Progress Path — IMPLEMENTED
 
 **The problem**: Showing "Session 12/60" is overwhelming — it emphasizes how much is left, not how much you've done. And we don't have a hard cap at 60 anyway (AI generation could extend it).
 
