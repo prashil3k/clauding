@@ -1160,11 +1160,11 @@ window.GRAMMAR_SKELETONS = {
 
 // ─── SKELETON SUMMARY ─────────────────────────────────────────
 // Total sessions: 60
-// Anchor sessions: 28 (47%) — topic+grammar inseparable
+// Anchor sessions: 29 (48%) — topic+grammar inseparable
 //   Café 1-4, Convenience 5-8, Restaurant 9-12, Transit 13-16,
 //   Shopping 17-20, Daily 21-22 & 24, Weather 37, Introductions 40,
 //   Meal rituals 52, Health/pharmacy 55, Travel 58, Texting 60
-// Non-anchor sessions: 32 (53%) — grammar transferable, AI can re-skin
+// Non-anchor sessions: 31 (52%) — grammar transferable, AI can re-skin
 //   Daily 23, Movies 25-28, Music 29-32, Feelings 33-36,
 //   Small talk 38-39, Work 41-43, Opinions 44-46, K-drama 47-49,
 //   Food culture 50-51, Philosophy 53-54, Wellbeing 56, Climbing 57,
