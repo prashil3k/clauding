@@ -1196,9 +1196,6 @@ Return ONLY the JSON array, no explanation.`;
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: 40 }}>
             <div className="fade-up">
               <TappableKorean korean={session.topicKorean} english={TOPIC_ENGLISH[session.topic] || session.topic} className="topic-tag" />
-              {session._personalized && (
-                <span style={{ fontSize: 11, color: 'var(--accent-warm)', marginLeft: 8, fontStyle: 'italic' }}>personalized</span>
-              )}
             </div>
             <div className="fade-up-delay" style={{ marginTop: 24 }}>
               <p className="serif" style={{ fontSize: 16, lineHeight: 1.7, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
@@ -2190,16 +2187,14 @@ Return ONLY the JSON array, no explanation.`;
                       {group.sessions.map(s => {
                         const done = completedSessions.includes(s.id);
                         const resolved = resolveSession(s);
-                        const isPersonalized = !!resolved._personalized;
                         const focusPhrase = resolved.phrases[resolved.focusIndex || 0];
                         return (
                           <button
                             key={s.id}
                             onClick={() => onStartSession(s.id)}
-                            title={focusPhrase.korean + ' — ' + focusPhrase.english + (isPersonalized ? ' (personalized)' : '')}
+                            title={focusPhrase.korean + ' — ' + focusPhrase.english}
                             style={{
-                              padding: '4px 10px', fontSize: 12, borderRadius: 6,
-                              border: isPersonalized && !done ? '1px solid var(--accent-warm)' : 'none',
+                              padding: '4px 10px', fontSize: 12, borderRadius: 6, border: 'none',
                               background: done ? 'var(--correct)' : 'white',
                               color: done ? 'white' : 'var(--text-secondary)',
                               cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
@@ -2710,10 +2705,33 @@ Return ONLY the JSON array, no explanation.`;
 
       const recentPhrases = useMemo(() => {
         return [...completedSessions].reverse().slice(0, 3).map(sid => {
-          const s = sessions.find(x => x.id === sid);
+          const raw = sessions.find(x => x.id === sid);
+          const s = raw ? resolveSession(raw) : null;
           return s ? s.phrases[s.focusIndex || 0] : null;
         }).filter(Boolean);
       }, [completedSessions]);
+
+      // Chapter info for next session
+      const nextResolved = nextSession ? resolveSession(nextSession) : null;
+      const chapterInfo = useMemo(() => {
+        if (!nextResolved) return null;
+        const topicSessions = sessions.filter(s => s.topic === nextResolved.topic);
+        const posInTopic = topicSessions.findIndex(s => s.id === nextResolved.id) + 1;
+        const total = topicSessions.length;
+        const skeletons = window.GRAMMAR_SKELETONS || {};
+        const sk = skeletons[nextResolved.id];
+        const grammarPreview = sk ? sk.grammar[0] : null;
+        return { posInTopic, total, grammarPreview };
+      }, [nextSession]);
+
+      // Peek at upcoming 2-3 sessions after the next one
+      const upcomingSessions = useMemo(() => {
+        return orderedRemaining.slice(1, 4).map(s => {
+          const resolved = resolveSession(s);
+          const sk = (window.GRAMMAR_SKELETONS || {})[s.id];
+          return { ...resolved, grammarPreview: sk ? sk.grammar[0] : null };
+        });
+      }, [orderedRemaining]);
 
       return (
         <div className="app-container">
@@ -2745,10 +2763,25 @@ Return ONLY the JSON array, no explanation.`;
             )}
 
             <div style={{ padding: '24px 0 32px' }} className="fade-up">
-              {!allDone && nextSession && (
-                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 8, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
-                  Next: {nextSession.topicKorean}
-                </p>
+              {!allDone && nextResolved && chapterInfo && (
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ fontSize: 14, color: 'var(--text)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                    <span className="korean">{nextResolved.topicKorean}</span>
+                    <span style={{ color: 'var(--text-tertiary)', marginLeft: 6, fontSize: 12 }}>
+                      {TOPIC_ENGLISH[nextResolved.topic] || nextResolved.topic}
+                    </span>
+                    {chapterInfo.total > 1 && (
+                      <span style={{ color: 'var(--text-tertiary)', marginLeft: 8, fontSize: 12 }}>
+                        · {chapterInfo.posInTopic} of {chapterInfo.total}
+                      </span>
+                    )}
+                  </p>
+                  {chapterInfo.grammarPreview && (
+                    <p style={{ fontSize: 12, color: 'var(--accent-warm)', marginTop: 4, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
+                      {chapterInfo.grammarPreview}
+                    </p>
+                  )}
+                </div>
               )}
               <button className="btn-primary" onClick={onStartSession} style={{ fontSize: 18, padding: '18px 24px' }}>
                 {allDone ? '복습하기' : '다음 한걸음'}
@@ -2763,6 +2796,22 @@ Return ONLY the JSON array, no explanation.`;
                 수업 목록 <span style={{ opacity: 0.5, fontSize: 11 }}>Lesson plan</span>
               </button>
             </div>
+
+            {/* Upcoming peek */}
+            {upcomingSessions.length > 0 && !allDone && (
+              <div className="fade-up-delay" style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>COMING UP</p>
+                {upcomingSessions.map(s => (
+                  <div key={s.id} style={{ padding: '6px 0', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span className="korean" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{s.topicKorean}</span>
+                    {s.grammarPreview && (
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>{s.grammarPreview}</span>
+                    )}
+                  </div>
+                ))}
+                <div className="divider" style={{ marginTop: 8 }} />
+              </div>
+            )}
 
             {recentPhrases.length > 0 && (
               <div className="fade-up-delay">
