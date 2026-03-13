@@ -272,9 +272,8 @@ All v1 features are built and functional:
 ## Future Roadmap
 
 **STATUS (do not re-verify or re-implement done items):**
-- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #4 AI Interest Mapping, #7 TTS Persistence (IndexedDB), #9 Reduce Session Exercise Count
-- **NEXT**: #8 AI Content Personalization (the big one)
-- **NOT STARTED**: #5, #6, #8
+- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #4 AI Interest Mapping, #5 Richer Anchor Content, #6 Progress Display, #7 TTS Persistence (IndexedDB), #8 AI Content Personalization, #9 Reduce Session Exercise Count
+- All roadmap items complete.
 - **MERGED**: Old #3 (Richer Dialogue), old #5 (Richer Content for all 60 sessions), old #9 (Post-60 Generation), and old #10 (AI Personalization) are unified into #8 (AI Content Personalization). The current #5 (Richer Anchor Session Content) is a narrower task — hand-polishing anchor sessions only, not all 60.
 - **DESIGN NOTE (not a roadmap item)**: Phrase cards are designed to be screenshot-worthy for stories — this is a visual design philosophy baked into the Collection view, not a feature to build.
 
@@ -358,12 +357,14 @@ This insight connects #2 (band-based reordering), #3 (grammar skeletons), #4 (AI
 
 **Connects to**: #2 (provides the interest scores that band-based reordering uses), #6 (ordering affects what shows in progress view), #8 (AI personalization needs accurate interest mapping as its first step).
 
-### 5. Richer Anchor Session Content
+### 5. Richer Anchor Session Content — IMPLEMENTED
 Hand-polish the anchor sessions: per-phrase `response` fields for natural dialogue (replacing generic `TOPIC_DIALOGUE_RESPONSES`), grammar examples in context, vocab reinforcement from multiple angles. The phrase is still the atom, but grammar + vocab repetition builds fluency. For non-anchor sessions, this richness comes from AI generation (#8) — so this task only covers the hand-built anchors.
 
-**Scope**: Medium — content authoring for anchor sessions only (~25-30 sessions), not all 60. The `DialogueBeat` component already reads `phrase.response` with fallback to `TOPIC_DIALOGUE_RESPONSES`, so no code change needed.
+**Implementation**: Added `response: { korean, english }` to the focus phrase (index 0) of all 29 anchor sessions. Each response is a natural reply from the other speaker (barista, cashier, server, driver, friend, pharmacist, etc.) that contextually follows the learner's phrase. DialogueBeat already reads `phrase.response` with fallback to `TOPIC_DIALOGUE_RESPONSES` — no code change needed.
 
-### 6. Learning Journey / Progress Path
+**Scope**: Content authoring only — 29 anchor sessions, focus phrases only.
+
+### 6. Learning Journey / Progress Path — IMPLEMENTED
 
 **The problem**: Showing "Session 12/60" is overwhelming — it emphasizes how much is left, not how much you've done. And we don't have a hard cap at 60 anyway (AI generation could extend it).
 
@@ -385,11 +386,13 @@ Hand-polish the anchor sessions: per-phrase `response` fields for natural dialog
 ### 7. TTS Persistence (IndexedDB)
 Audio cache currently dies on page reload — in-memory only. Persist to IndexedDB for true offline TTS. This is a **medium** effort — storage layer change, cache invalidation logic, but no UI changes.
 
-### 8. AI Content Personalization (Unified System)
+### 8. AI Content Personalization (Unified System) — IMPLEMENTED
 
 > **Note**: This merges old items #3 (Richer Dialogue), #5 (Richer Content), #9 (Post-60 Generation), and #10 (AI Personalization) into one coherent system. The app works fine without it — the 60 hand-built sessions are the product; this is an enhancement layer.
 
 **The core model**: Grammar skeletons (#3) define what must be learned. AI's only job is to dress each skeleton in the user's interest. It doesn't invent curriculum, decide difficulty, or touch anchor sessions. It re-skins.
+
+**Implementation**: `personalizeSessionBatch()` sends non-anchor session skeletons + user interests to Gemini Flash in batches of 3. `resolveSession()` swaps in cached personalized content at session load time. Settings UI shows "Personalize My Lessons" button (visible when both Gemini key and About You are set). Personalized sessions cached in localStorage (`personalized_{id}`), included in backup/restore. Lesson plan shows warm-accent border on personalized sessions. Scene card shows "personalized" tag. `clearPersonalizedSessions()` reverts to defaults.
 
 **Two-tier content**:
 - **Anchor tier (no AI, no API, always works)**: Hand-built sessions where topic + grammar are naturally paired (café + ordering, transit + directions). These ship as-is and are never modified. Someone who never touches "About You" gets the full 60-session experience with anchors in their natural form and non-anchor sessions in their default topic.

@@ -762,6 +762,179 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
       return buildInterestMapRegex(aboutText);
     }
 
+    // ─── AI Content Personalization (#8) ──────────────────────────
+    // Re-skins non-anchor sessions using grammar skeletons + user interests.
+    // Anchor sessions are never touched. Falls back to default if AI fails.
+
+    function getNonAnchorIds() {
+      const skeletons = window.GRAMMAR_SKELETONS || {};
+      return Object.entries(skeletons)
+        .filter(([_, sk]) => !sk.anchor)
+        .map(([id]) => parseInt(id));
+    }
+
+    function getPersonalizedSession(sessionId) {
+      return load(`personalized_${sessionId}`, null);
+    }
+
+    // Resolve a session: use personalized version if available for non-anchors
+    function resolveSession(session) {
+      const skeletons = window.GRAMMAR_SKELETONS || {};
+      const sk = skeletons[session.id];
+      if (!sk || sk.anchor) return session;
+      const personalized = getPersonalizedSession(session.id);
+      return personalized || session;
+    }
+
+    // Generate personalized content for a batch of non-anchor sessions
+    async function personalizeSessionBatch(sessionIds, userInterest, onProgress) {
+      const apiKey = load('geminiKey', '');
+      if (!apiKey) throw new Error('No Gemini API key');
+      const sessions = window.SESSIONS || [];
+      const skeletons = window.GRAMMAR_SKELETONS || {};
+      const results = {};
+      let completed = 0;
+
+      // Process in batches of 3
+      for (let i = 0; i < sessionIds.length; i += 3) {
+        const batch = sessionIds.slice(i, i + 3);
+        const batchData = batch.map(id => {
+          const original = sessions.find(s => s.id === id);
+          const sk = skeletons[id];
+          return { id, original, skeleton: sk };
+        }).filter(b => b.original && b.skeleton);
+
+        if (batchData.length === 0) continue;
+
+        const prompt = buildPersonalizationPrompt(batchData, userInterest);
+        try {
+          const resp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.7 }
+              })
+            }
+          );
+          if (!resp.ok) throw new Error(`API ${resp.status}`);
+          const data = await resp.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const parsed = parsePersonalizationResponse(text, batchData);
+
+          Object.entries(parsed).forEach(([id, session]) => {
+            save(`personalized_${id}`, session);
+            results[id] = session;
+          });
+        } catch (e) {
+          console.warn(`Personalization batch failed (sessions ${batch.join(',')}):`, e.message);
+          // Skip this batch — sessions fall back to defaults
+        }
+
+        completed += batchData.length;
+        if (onProgress) onProgress(completed, sessionIds.length);
+      }
+
+      return results;
+    }
+
+    function buildPersonalizationPrompt(batchData, userInterest) {
+      const sessionsDesc = batchData.map(({ id, original, skeleton }) => {
+        const band = id <= 20 ? 'Band 1 (TOPIK 1 basics)' : id <= 40 ? 'Band 2 (TOPIK 1 extended)' : 'Band 3 (TOPIK 2)';
+        return `Session ${id} (${band}, level: ${original.level}):
+  Grammar points: ${skeleton.grammar.join('; ')}
+  Key vocabulary: ${skeleton.keyVocab.join(', ')}
+  Original topic: ${original.topic}
+  Notes: ${skeleton.notes}`;
+      }).join('\n\n');
+
+      return `You are generating content for a Korean language learning app. The user is interested in: "${userInterest}"
+
+For each session below, create a personalized version themed around the user's interest. You MUST:
+1. Use ALL the specified grammar points in the phrases
+2. Use the key vocabulary
+3. Stay within the TOPIK level — do NOT use grammar/vocab above the session's level
+4. Create exactly 5 phrases per session
+5. Write a scene (2-3 sentences) grounded in the user's interest
+6. Each phrase needs: korean, english, context (1 short sentence), grammar (explain the grammar point used)
+7. The first phrase (focusIndex 0) should be the most important one for the grammar point
+
+If the user's interest doesn't fit naturally with a session's grammar, use the original topic instead — don't force it.
+
+Sessions to personalize:
+
+${sessionsDesc}
+
+Return a JSON array of objects, one per session, in this EXACT format:
+[
+  {
+    "id": 25,
+    "topic": "short-topic-name",
+    "topicKorean": "토픽이름",
+    "scene": "Scene description...",
+    "phrases": [
+      { "korean": "한국어 문장.", "english": "English translation.", "context": "When to use this", "grammar": "Grammar explanation" },
+      ... (5 phrases total)
+    ]
+  }
+]
+
+Return ONLY the JSON array, no explanation.`;
+    }
+
+    function parsePersonalizationResponse(text, batchData) {
+      const results = {};
+      try {
+        // Extract JSON array from response
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) throw new Error('No JSON array in response');
+        const arr = JSON.parse(jsonMatch[0]);
+
+        arr.forEach(item => {
+          const bd = batchData.find(b => b.id === item.id);
+          if (!bd) return;
+
+          // Validate required fields
+          if (!item.scene || !Array.isArray(item.phrases) || item.phrases.length < 3) return;
+
+          // Build valid session object matching existing format
+          const phrases = item.phrases.slice(0, 5).map((p, i) => ({
+            id: `s${item.id}p${i + 1}`,
+            korean: p.korean || '',
+            english: p.english || '',
+            context: p.context || '',
+            grammar: p.grammar || null
+          }));
+
+          // Skip if any phrase is missing korean/english
+          if (phrases.some(p => !p.korean || !p.english)) return;
+
+          results[item.id] = {
+            id: item.id,
+            topic: item.topic || bd.original.topic,
+            topicKorean: item.topicKorean || bd.original.topicKorean,
+            level: bd.original.level,
+            scene: item.scene,
+            focusIndex: 0,
+            phrases,
+            _personalized: true  // marker for UI
+          };
+        });
+      } catch (e) {
+        console.warn('Failed to parse personalization response:', e.message);
+      }
+      return results;
+    }
+
+    // Clear all personalized sessions
+    function clearPersonalizedSessions() {
+      getNonAnchorIds().forEach(id => {
+        try { localStorage.removeItem('hgr_personalized_' + id); } catch (_) {}
+      });
+    }
+
     function getOrderedSessions(completedIds, interestMap) {
       const sessions = window.SESSIONS || [];
       const remaining = sessions.filter(s => !completedIds.includes(s.id));
@@ -1644,7 +1817,8 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
         hasCheckpoint ? 'phrases' : (hasMasteryData ? 'warmup' : 'scene')
       );
       const sessions = window.SESSIONS || [];
-      const session = sessions.find(s => s.id === sessionId);
+      const rawSession = sessions.find(s => s.id === sessionId);
+      const session = rawSession ? resolveSession(rawSession) : null;
 
       useEffect(() => {
         if (session) prefetchSessionAudio(session);
@@ -1738,13 +1912,15 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
         return [...completedSessions]
           .map(sid => sessions.find(x => x.id === sid))
           .filter(Boolean)
+          .map(s => resolveSession(s))
           .reverse();
       }, [completedSessions]);
 
       const learnedPhrases = useMemo(() => {
         const phrases = [];
         completedSessions.forEach(sid => {
-          const s = sessions.find(x => x.id === sid);
+          const raw = sessions.find(x => x.id === sid);
+          const s = raw ? resolveSession(raw) : null;
           if (s) s.phrases.forEach(p => phrases.push({ ...p, session: s }));
         });
         return phrases;
@@ -2010,7 +2186,8 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {group.sessions.map(s => {
                         const done = completedSessions.includes(s.id);
-                        const focusPhrase = s.phrases[s.focusIndex || 0];
+                        const resolved = resolveSession(s);
+                        const focusPhrase = resolved.phrases[resolved.focusIndex || 0];
                         return (
                           <button
                             key={s.id}
@@ -2026,7 +2203,6 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
                             }}
                           >
                             {s.id}
-                          </button>
                         );
                       })}
                     </div>
@@ -2143,6 +2319,51 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
       }
 
       const [ttsTestResult, setTtsTestResult] = useState('');
+      const [personalizing, setPersonalizing] = useState(false);
+      const [personalizeProgress, setPersonalizeProgress] = useState('');
+      const nonAnchorCount = useMemo(() => getNonAnchorIds().length, []);
+      const personalizedCount = useMemo(() => {
+        return getNonAnchorIds().filter(id => getPersonalizedSession(id)).length;
+      }, [personalizing]); // re-count when personalizing finishes
+
+      async function handlePersonalize() {
+        const key = geminiKey || geminiInput.trim();
+        if (!key) { setPersonalizeProgress('Add a Gemini API key first'); setTimeout(() => setPersonalizeProgress(''), 3000); return; }
+        const about = aboutYou || aboutInput.trim();
+        if (!about) { setPersonalizeProgress('Write something in "About You" first'); setTimeout(() => setPersonalizeProgress(''), 3000); return; }
+
+        // Get top interest from interest map
+        const interestMap = buildInterestMap(about);
+        const topInterest = interestMap
+          ? Object.entries(interestMap).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t).join(', ')
+          : about.slice(0, 200);
+
+        const ids = getNonAnchorIds();
+        if (ids.length === 0) { setPersonalizeProgress('No sessions to personalize'); return; }
+
+        setPersonalizing(true);
+        setPersonalizeProgress(`Generating... 0 / ${ids.length}`);
+
+        try {
+          await personalizeSessionBatch(ids, topInterest, (done, total) => {
+            setPersonalizeProgress(`Generating... ${done} / ${total}`);
+          });
+          const count = ids.filter(id => getPersonalizedSession(id)).length;
+          setPersonalizeProgress(`Done — ${count} sessions personalized`);
+          setTimeout(() => setPersonalizeProgress(''), 5000);
+        } catch (e) {
+          setPersonalizeProgress('Failed: ' + e.message);
+          setTimeout(() => setPersonalizeProgress(''), 5000);
+        }
+        setPersonalizing(false);
+      }
+
+      function handleClearPersonalization() {
+        if (!confirm('Remove all personalized content? Sessions will revert to defaults.')) return;
+        clearPersonalizedSessions();
+        setPersonalizeProgress('Cleared — using default sessions');
+        setTimeout(() => setPersonalizeProgress(''), 3000);
+      }
 
       async function testVoice() {
         setTestPlaying(true);
@@ -2161,7 +2382,9 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
       }
 
       const DATA_KEYS = ['completedSessions', 'mastery', 'streak', 'lastSessionDate',
-        'apiKey', 'geminiKey', 'ttsModel', 'ttsVoice', 'ttsModels', 'welcomed', 'aboutYou'];
+        'apiKey', 'geminiKey', 'ttsModel', 'ttsVoice', 'ttsModels', 'welcomed', 'aboutYou',
+        'aiInterestMap', 'aiInterestMapText',
+        ...getNonAnchorIds().map(id => `personalized_${id}`)];
 
       function handleExport() {
         const data = {};
@@ -2382,6 +2605,45 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
               )}
             </div>
 
+            {/* AI Content Personalization */}
+            {aboutYou && geminiKey && (
+              <div className="settings-section" style={{ marginTop: 16 }}>
+                <label className="settings-label">Personalized Lessons</label>
+                <p className="settings-hint">
+                  Re-theme {nonAnchorCount} non-anchor sessions around your interests using AI. Anchor sessions (café ordering, transit, etc.) stay as-is.
+                  {personalizedCount > 0 && ` Currently: ${personalizedCount} / ${nonAnchorCount} personalized.`}
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn-primary"
+                    onClick={handlePersonalize}
+                    disabled={personalizing}
+                    style={{ flex: 1, padding: '12px 16px', fontSize: 14, opacity: personalizing ? 0.6 : 1 }}
+                  >
+                    {personalizing ? 'Generating...' : personalizedCount > 0 ? 'Regenerate' : 'Personalize My Lessons'}
+                  </button>
+                  {personalizedCount > 0 && !personalizing && (
+                    <button
+                      className="btn-secondary"
+                      onClick={handleClearPersonalization}
+                      style={{ padding: '12px 16px', fontSize: 14 }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {personalizeProgress && (
+                  <p style={{
+                    fontSize: 12, marginTop: 8, fontStyle: 'italic',
+                    color: personalizeProgress.startsWith('Done') ? 'var(--correct)' :
+                           personalizeProgress.startsWith('Failed') ? 'var(--incorrect)' : 'var(--text-secondary)'
+                  }}>
+                    {personalizeProgress}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="divider" style={{ margin: '8px 0 24px' }} />
 
             {/* Export / Import */}
@@ -2443,10 +2705,33 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
 
       const recentPhrases = useMemo(() => {
         return [...completedSessions].reverse().slice(0, 3).map(sid => {
-          const s = sessions.find(x => x.id === sid);
+          const raw = sessions.find(x => x.id === sid);
+          const s = raw ? resolveSession(raw) : null;
           return s ? s.phrases[s.focusIndex || 0] : null;
         }).filter(Boolean);
       }, [completedSessions]);
+
+      // Chapter info for next session
+      const nextResolved = nextSession ? resolveSession(nextSession) : null;
+      const chapterInfo = useMemo(() => {
+        if (!nextResolved) return null;
+        const topicSessions = sessions.filter(s => s.topic === nextResolved.topic);
+        const posInTopic = topicSessions.findIndex(s => s.id === nextResolved.id) + 1;
+        const total = topicSessions.length;
+        const skeletons = window.GRAMMAR_SKELETONS || {};
+        const sk = skeletons[nextResolved.id];
+        const grammarPreview = sk ? sk.grammar[0] : null;
+        return { posInTopic, total, grammarPreview };
+      }, [nextSession]);
+
+      // Peek at upcoming 2-3 sessions after the next one
+      const upcomingSessions = useMemo(() => {
+        return orderedRemaining.slice(1, 4).map(s => {
+          const resolved = resolveSession(s);
+          const sk = (window.GRAMMAR_SKELETONS || {})[s.id];
+          return { ...resolved, grammarPreview: sk ? sk.grammar[0] : null };
+        });
+      }, [orderedRemaining]);
 
       return (
         <div className="app-container">
@@ -2478,10 +2763,25 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
             )}
 
             <div style={{ padding: '24px 0 32px' }} className="fade-up">
-              {!allDone && nextSession && (
-                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 8, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
-                  Next: {nextSession.topicKorean}
-                </p>
+              {!allDone && nextResolved && chapterInfo && (
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ fontSize: 14, color: 'var(--text)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                    <span className="korean">{nextResolved.topicKorean}</span>
+                    <span style={{ color: 'var(--text-tertiary)', marginLeft: 6, fontSize: 12 }}>
+                      {TOPIC_ENGLISH[nextResolved.topic] || nextResolved.topic}
+                    </span>
+                    {chapterInfo.total > 1 && (
+                      <span style={{ color: 'var(--text-tertiary)', marginLeft: 8, fontSize: 12 }}>
+                        · {chapterInfo.posInTopic} of {chapterInfo.total}
+                      </span>
+                    )}
+                  </p>
+                  {chapterInfo.grammarPreview && (
+                    <p style={{ fontSize: 12, color: 'var(--accent-warm)', marginTop: 4, fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>
+                      {chapterInfo.grammarPreview}
+                    </p>
+                  )}
+                </div>
               )}
               <button className="btn-primary" onClick={onStartSession} style={{ fontSize: 18, padding: '18px 24px' }}>
                 {allDone ? '복습하기' : '다음 한걸음'}
@@ -2496,6 +2796,22 @@ Return format: {"topic": score, ...} — only include topics with score > 0.`;
                 수업 목록 <span style={{ opacity: 0.5, fontSize: 11 }}>Lesson plan</span>
               </button>
             </div>
+
+            {/* Upcoming peek */}
+            {upcomingSessions.length > 0 && !allDone && (
+              <div className="fade-up-delay" style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>COMING UP</p>
+                {upcomingSessions.map(s => (
+                  <div key={s.id} style={{ padding: '6px 0', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span className="korean" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{s.topicKorean}</span>
+                    {s.grammarPreview && (
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>{s.grammarPreview}</span>
+                    )}
+                  </div>
+                ))}
+                <div className="divider" style={{ marginTop: 8 }} />
+              </div>
+            )}
 
             {recentPhrases.length > 0 && (
               <div className="fade-up-delay">
