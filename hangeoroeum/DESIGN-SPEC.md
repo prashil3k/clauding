@@ -272,9 +272,9 @@ All v1 features are built and functional:
 ## Future Roadmap
 
 **STATUS (do not re-verify or re-implement done items):**
-- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #4 AI Interest Mapping, #7 TTS Persistence (IndexedDB), #9 Reduce Session Exercise Count
-- **NEXT**: #8 AI Content Personalization (the big one)
-- **NOT STARTED**: #5, #6, #8
+- **DONE**: #1 Session Checkpoints, #2 Band-Based Interest Reordering, #3 Grammar Skeletons & Anchor Sessions, #4 AI Interest Mapping, #7 TTS Persistence (IndexedDB), #8 AI Content Personalization, #9 Reduce Session Exercise Count
+- **NEXT**: #5 Richer Anchor Content, #6 Progress Display
+- **NOT STARTED**: #5, #6
 - **MERGED**: Old #3 (Richer Dialogue), old #5 (Richer Content for all 60 sessions), old #9 (Post-60 Generation), and old #10 (AI Personalization) are unified into #8 (AI Content Personalization). The current #5 (Richer Anchor Session Content) is a narrower task — hand-polishing anchor sessions only, not all 60.
 - **DESIGN NOTE (not a roadmap item)**: Phrase cards are designed to be screenshot-worthy for stories — this is a visual design philosophy baked into the Collection view, not a feature to build.
 
@@ -385,11 +385,13 @@ Hand-polish the anchor sessions: per-phrase `response` fields for natural dialog
 ### 7. TTS Persistence (IndexedDB)
 Audio cache currently dies on page reload — in-memory only. Persist to IndexedDB for true offline TTS. This is a **medium** effort — storage layer change, cache invalidation logic, but no UI changes.
 
-### 8. AI Content Personalization (Unified System)
+### 8. AI Content Personalization (Unified System) — IMPLEMENTED
 
 > **Note**: This merges old items #3 (Richer Dialogue), #5 (Richer Content), #9 (Post-60 Generation), and #10 (AI Personalization) into one coherent system. The app works fine without it — the 60 hand-built sessions are the product; this is an enhancement layer.
 
 **The core model**: Grammar skeletons (#3) define what must be learned. AI's only job is to dress each skeleton in the user's interest. It doesn't invent curriculum, decide difficulty, or touch anchor sessions. It re-skins.
+
+**Implementation**: `personalizeSessionBatch()` sends non-anchor session skeletons + user interests to Gemini Flash in batches of 3. `resolveSession()` swaps in cached personalized content at session load time. Settings UI shows "Personalize My Lessons" button (visible when both Gemini key and About You are set). Personalized sessions cached in localStorage (`personalized_{id}`), included in backup/restore. Lesson plan shows warm-accent border on personalized sessions. Scene card shows "personalized" tag. `clearPersonalizedSessions()` reverts to defaults.
 
 **Two-tier content**:
 - **Anchor tier (no AI, no API, always works)**: Hand-built sessions where topic + grammar are naturally paired (café + ordering, transit + directions). These ship as-is and are never modified. Someone who never touches "About You" gets the full 60-session experience with anchors in their natural form and non-anchor sessions in their default topic.
